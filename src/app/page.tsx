@@ -1,10 +1,12 @@
 import { redirect } from "next/navigation";
 import { createServerClient } from "@/lib/supabase/server";
+import { ensureWorkspacesExist } from "@/lib/db/ensure-workspaces";
 
 /**
  * Strona główna — przekierowuje na podstawie stanu autentykacji.
  *
  * - Zalogowany → pierwszy workspace (po slug)
+ *   - Jeśli brak workspace'ów — automatycznie tworzy dwa domyślne
  * - Niezalogowany → /login
  */
 export default async function HomePage() {
@@ -38,6 +40,7 @@ export default async function HomePage() {
     }
   }
 
-  // Brak workspace — redirect do loginu (workspace powinien być tworzony przy rejestracji)
-  redirect("/login");
+  // Brak workspace — auto-tworzenie domyślnych workspace'ów
+  const slug = await ensureWorkspacesExist(user.id, user.email ?? user.id);
+  redirect(`/${slug}`);
 }
