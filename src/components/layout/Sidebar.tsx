@@ -3,15 +3,10 @@
 import type { ComponentType } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  ChevronLeft,
-  ChevronRight,
-  FolderKanban,
-  NotebookPen,
-  Settings,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, FolderKanban, NotebookPen, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSidebarStore } from "@/lib/stores/sidebar-store";
+import { WorkspaceSwitcher } from "@/components/layout/WorkspaceSwitcher";
 
 interface WorkspaceItem {
   id: string;
@@ -37,10 +32,6 @@ interface SidebarLinkProps {
   icon: ComponentType<{ className?: string }>;
   isActive: boolean;
   collapsed: boolean;
-}
-
-function workspaceDotColor(type: WorkspaceItem["type"]) {
-  return type === "personal" ? "bg-violet-500" : "bg-sky-500";
 }
 
 function SidebarLink({ href, label, icon: Icon, isActive, collapsed }: SidebarLinkProps) {
@@ -88,15 +79,14 @@ export function Sidebar({ currentWorkspaceSlug, workspaces, projects }: SidebarP
         isCollapsed ? "w-14" : "w-60"
       )}
     >
-      <div className="flex items-center justify-between gap-2">
-        {!isCollapsed && (
-          <div className="min-w-0 flex-1">
-            <p className="text-xs uppercase tracking-wider text-content-muted">Workspace</p>
-            <p className="truncate text-sm font-medium text-content-primary">
-              {workspaces.find((workspace) => workspace.slug === currentWorkspaceSlug)?.name ?? "Workspace"}
-            </p>
-          </div>
-        )}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <WorkspaceSwitcher
+            currentWorkspaceSlug={currentWorkspaceSlug}
+            workspaces={workspaces}
+            isCollapsed={isCollapsed}
+          />
+        </div>
         <button
           type="button"
           onClick={toggle}
@@ -106,28 +96,6 @@ export function Sidebar({ currentWorkspaceSlug, workspaces, projects }: SidebarP
           {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </button>
       </div>
-
-      {!isCollapsed && (
-        <div className="mt-4 space-y-1 rounded-md border border-border-subtle bg-bg-surface p-2">
-          {workspaces.map((workspace) => {
-            const isWorkspaceActive = workspace.slug === currentWorkspaceSlug;
-
-            return (
-              <Link
-                key={workspace.id}
-                href={`/${workspace.slug}`}
-                className={cn(
-                  "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-content-secondary transition-colors duration-150 hover:bg-bg-elevated hover:text-content-primary",
-                  isWorkspaceActive && "bg-bg-elevated text-content-primary"
-                )}
-              >
-                <span className={cn("h-2 w-2 rounded-full", workspaceDotColor(workspace.type))} />
-                <span className="truncate">{workspace.name}</span>
-              </Link>
-            );
-          })}
-        </div>
-      )}
 
       <nav className="mt-6 space-y-1">
         <SidebarLink

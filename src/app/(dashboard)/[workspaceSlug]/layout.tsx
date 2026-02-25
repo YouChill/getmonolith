@@ -14,6 +14,16 @@ interface DashboardShellProps {
   workspaceSlug: string;
 }
 
+interface WorkspaceMembership {
+  workspace: {
+    id: string;
+    name: string;
+    slug: string;
+    type: "personal" | "work";
+    created_at: string;
+  } | null;
+}
+
 async function DashboardShell({ children, workspaceSlug }: DashboardShellProps) {
   const supabase = await createServerClient();
 
@@ -27,22 +37,20 @@ async function DashboardShell({ children, workspaceSlug }: DashboardShellProps) 
 
   const { data: memberships, error: membershipsError } = await supabase
     .from("workspace_members")
-    .select("workspace_id")
-    .eq("user_id", user.id);
+    .select("workspace:workspaces(id, name, slug, type, created_at)")
+    .eq("user_id", user.id)
+    .returns<WorkspaceMembership[]>();
 
   if (membershipsError || !memberships?.length) {
     redirect("/");
   }
 
-  const workspaceIds = memberships.map((membership) => membership.workspace_id);
+  const workspaces = memberships
+    .map((membership) => membership.workspace)
+    .filter((workspace): workspace is NonNullable<WorkspaceMembership["workspace"]> => workspace !== null)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
 
-  const { data: workspaces, error: workspacesError } = await supabase
-    .from("workspaces")
-    .select("id, name, slug, type")
-    .in("id", workspaceIds)
-    .order("created_at", { ascending: true });
-
-  if (workspacesError || !workspaces?.length) {
+  if (!workspaces.length) {
     redirect("/");
   }
 
