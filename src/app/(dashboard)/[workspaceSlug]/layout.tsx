@@ -62,7 +62,7 @@ async function DashboardShell({ children, workspaceSlug }: DashboardShellProps) 
 
   const { data: projects } = await supabase
     .from("projects")
-    .select("id, name")
+    .select("id, name, icon, color")
     .eq("workspace_id", currentWorkspace.id)
     .order("created_at", { ascending: true });
 
@@ -70,6 +70,7 @@ async function DashboardShell({ children, workspaceSlug }: DashboardShellProps) 
     <>
       <Sidebar
         currentWorkspaceSlug={workspaceSlug}
+        workspaceId={currentWorkspace.id}
         workspaces={workspaces}
         projects={projects ?? []}
       />
