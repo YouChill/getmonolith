@@ -21,7 +21,6 @@ export default async function WorkspacePage({ params }: WorkspacePageProps) {
     redirect("/login");
   }
 
-  // Sprawdź, czy workspace istnieje i użytkownik ma do niego dostęp
   const { data: workspace } = await supabase
     .from("workspaces")
     .select("id, name, slug")
@@ -32,7 +31,6 @@ export default async function WorkspacePage({ params }: WorkspacePageProps) {
     redirect("/");
   }
 
-  // Sprawdź membership
   const { data: membership } = await supabase
     .from("workspace_members")
     .select("role")
@@ -44,14 +42,24 @@ export default async function WorkspacePage({ params }: WorkspacePageProps) {
     redirect("/");
   }
 
+  const { data: firstProject } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("workspace_id", workspace.id)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .single();
+
+  if (firstProject) {
+    redirect(`/${workspaceSlug}/board/${firstProject.id}`);
+  }
+
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-bg-base px-4">
-      <div className="max-w-md text-center">
-        <h1 className="text-2xl font-semibold text-content-primary">
-          {workspace.name}
-        </h1>
+    <div className="px-8 py-6">
+      <div className="max-w-[720px]">
+        <h1 className="text-2xl font-semibold text-content-primary">{workspace.name}</h1>
         <p className="mt-2 text-content-muted">
-          Workspace jest gotowy. Sidebar, projekty i widok Kanban — wkrótce.
+          Brak projektów. Utwórz pierwszy projekt, aby rozpocząć pracę z tablicą.
         </p>
       </div>
     </div>
