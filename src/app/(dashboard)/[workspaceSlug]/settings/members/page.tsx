@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createServerClient } from "@/lib/supabase/server";
 import { InviteMemberForm } from "./InviteMemberForm";
+import { MemberActions } from "./MemberActions";
 
 interface MembersPageProps {
   params: Promise<{ workspaceSlug: string }>;
@@ -75,6 +76,7 @@ export default async function MembersSettingsPage({ params }: MembersPageProps) 
                 <th className="px-4 py-3 font-medium">Rola</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Zaproszono</th>
+                <th className="px-4 py-3 font-medium">Akcje</th>
               </tr>
             </thead>
             <tbody>
@@ -87,6 +89,15 @@ export default async function MembersSettingsPage({ params }: MembersPageProps) 
                   </td>
                   <td className="px-4 py-3 text-content-secondary">
                     {member.invited_at ? new Date(member.invited_at).toLocaleString("pl-PL") : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-content-secondary">
+                    <MemberActions
+                      workspaceId={workspace.id}
+                      memberUserId={member.user_id}
+                      memberRole={member.role}
+                      currentUserId={user.id}
+                      currentUserRole={myMembership.role}
+                    />
                   </td>
                 </tr>
               ))}
