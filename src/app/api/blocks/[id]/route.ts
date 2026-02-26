@@ -5,15 +5,26 @@ import { createServerClient } from "@/lib/supabase/server";
 interface UpdateBlockPayload {
   title?: string;
   status?: TaskStatus;
+  due_date?: string | null;
+  priority?: "low" | "medium" | "high" | "urgent" | null;
+  assigned_to?: string | null;
   position?: number;
+  content?: unknown;
 }
 
-interface TaskProperties {
+interface BlockProperties {
   title?: string;
   status?: TaskStatus;
   due_date?: string;
   priority?: "low" | "medium" | "high" | "urgent";
   assigned_to?: string;
+}
+
+interface AccessibleBlock {
+  id: string;
+  workspace_id: string;
+  type: string;
+  properties: BlockProperties | null;
 }
 
 function isTaskStatus(value?: string): value is TaskStatus {
@@ -24,21 +35,21 @@ function isTaskStatus(value?: string): value is TaskStatus {
   return TASK_STATUSES.includes(value as TaskStatus);
 }
 
-async function ensureTaskAccess(taskId: string, userId: string) {
+function isPriority(value?: string): value is NonNullable<BlockProperties["priority"]> {
+  return value === "low" || value === "medium" || value === "high" || value === "urgent";
+}
+
+async function ensureBlockAccess(blockId: string, userId: string) {
   const supabase = await createServerClient();
 
   const { data: block, error: blockError } = await supabase
     .from("blocks")
     .select("id, workspace_id, type, properties")
-    .eq("id", taskId)
-    .single();
+    .eq("id", blockId)
+    .single<AccessibleBlock>();
 
   if (blockError || !block) {
-    return { data: null, error: "Task not found", status: 404 as const, supabase };
-  }
-
-  if (block.type !== "task") {
-    return { data: null, error: "Block is not a task", status: 400 as const, supabase };
+    return { data: null, error: "Block not found", status: 404 as const, supabase };
   }
 
   const { data: membership, error: membershipError } = await supabase
@@ -68,50 +79,95 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     return NextResponse.json({ data: null, error: "Unauthorized" }, { status: 401 });
   }
 
-  const access = await ensureTaskAccess(id, user.id);
+  const access = await ensureBlockAccess(id, user.id);
 
   if (access.error || !access.data) {
     return NextResponse.json({ data: null, error: access.error }, { status: access.status });
   }
 
   const body = (await request.json()) as UpdateBlockPayload;
-  const currentProperties = (access.data.properties ?? {}) as TaskProperties;
+  const currentProperties = (access.data.properties ?? {}) as BlockProperties;
 
   if (typeof body.title === "string" && !body.title.trim()) {
     return NextResponse.json({ data: null, error: "Tytuł jest wymagany." }, { status: 400 });
-  }
-
-  if (typeof body.status === "string" && !isTaskStatus(body.status)) {
-    return NextResponse.json({ data: null, error: "Nieprawidłowy status zadania." }, { status: 400 });
   }
 
   if (typeof body.position !== "undefined" && (!Number.isFinite(body.position) || body.position <= 0)) {
     return NextResponse.json({ data: null, error: "Nieprawidłowa pozycja zadania." }, { status: 400 });
   }
 
-  if (typeof body.title !== "string" && typeof body.status !== "string" && typeof body.position !== "number") {
+  if (access.data.type === "task") {
+    if (typeof body.status === "string" && !isTaskStatus(body.status)) {
+      return NextResponse.json({ data: null, error: "Nieprawidłowy status zadania." }, { status: 400 });
+    }
+
+    if (typeof body.priority === "string" && !isPriority(body.priority)) {
+      return NextResponse.json({ data: null, error: "Nieprawidłowy priorytet zadania." }, { status: 400 });
+    }
+  }
+
+  const hasUpdatableFields =
+    typeof body.title === "string" ||
+    typeof body.status === "string" ||
+    typeof body.position === "number" ||
+    typeof body.due_date !== "undefined" ||
+    typeof body.priority !== "undefined" ||
+    typeof body.assigned_to !== "undefined" ||
+    typeof body.content !== "undefined";
+
+  if (!hasUpdatableFields) {
     return NextResponse.json({ data: null, error: "Brak danych do aktualizacji." }, { status: 400 });
   }
 
-  const nextProperties: TaskProperties = {
+  const nextProperties: BlockProperties = {
     ...currentProperties,
     ...(typeof body.title === "string" ? { title: body.title.trim() } : {}),
-    ...(typeof body.status === "string" ? { status: body.status } : {}),
   };
+
+  if (access.data.type === "task") {
+    if (typeof body.status === "string") {
+      nextProperties.status = body.status;
+    }
+
+    if (typeof body.due_date !== "undefined") {
+      if (body.due_date) {
+        nextProperties.due_date = body.due_date;
+      } else {
+        delete nextProperties.due_date;
+      }
+    }
+
+    if (typeof body.priority !== "undefined") {
+      if (body.priority) {
+        nextProperties.priority = body.priority;
+      } else {
+        delete nextProperties.priority;
+      }
+    }
+
+    if (typeof body.assigned_to !== "undefined") {
+      if (body.assigned_to) {
+        nextProperties.assigned_to = body.assigned_to;
+      } else {
+        delete nextProperties.assigned_to;
+      }
+    }
+  }
 
   const { data, error } = await access.supabase
     .from("blocks")
     .update({
       properties: nextProperties,
       ...(typeof body.position === "number" ? { position: body.position } : {}),
+      ...(typeof body.content !== "undefined" ? { content: body.content } : {}),
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)
-    .select("id, properties, position")
+    .select("id, type, properties, content, position")
     .single();
 
   if (error || !data) {
-    return NextResponse.json({ data: null, error: error?.message ?? "Nie udało się zaktualizować zadania." }, { status: 500 });
+    return NextResponse.json({ data: null, error: error?.message ?? "Nie udało się zaktualizować bloku." }, { status: 500 });
   }
 
   return NextResponse.json({ data, error: null });
@@ -130,7 +186,7 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
     return NextResponse.json({ data: null, error: "Unauthorized" }, { status: 401 });
   }
 
-  const access = await ensureTaskAccess(id, user.id);
+  const access = await ensureBlockAccess(id, user.id);
 
   if (access.error || !access.data) {
     return NextResponse.json({ data: null, error: access.error }, { status: access.status });
@@ -139,7 +195,7 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
   const { error } = await access.supabase.from("blocks").delete().eq("id", id);
 
   if (error) {
-    return NextResponse.json({ data: null, error: "Nie udało się usunąć zadania." }, { status: 500 });
+    return NextResponse.json({ data: null, error: "Nie udało się usunąć bloku." }, { status: 500 });
   }
 
   return NextResponse.json({ data: { id }, error: null });
