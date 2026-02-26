@@ -10,7 +10,7 @@ interface NotesTreeSidebarProps {
   workspaceId: string;
   workspaceSlug: string;
   isCollapsed: boolean;
-  pages: Array<{ id: string; parent_block_id: string | null; position: number; properties: { title?: string } | null }>;
+  pages: Array<{ id: string; parent_block_id: string | null; position: number; properties: { title?: string; icon?: string } | null }>;
 }
 
 export function NotesTreeSidebar({ workspaceId, workspaceSlug, isCollapsed, pages }: NotesTreeSidebarProps) {
@@ -25,6 +25,7 @@ export function NotesTreeSidebar({ workspaceId, workspaceSlug, isCollapsed, page
       parentBlockId: page.parent_block_id,
       position: page.position,
       title: page.properties?.title?.trim() || "Bez tytułu",
+      icon: page.properties?.icon?.trim() || "📝",
     }))
   );
 
@@ -104,7 +105,7 @@ export function NotesTreeSidebar({ workspaceId, workspaceSlug, isCollapsed, page
       .filter((page) => page.parentBlockId === parentBlockId)
       .reduce((max, page) => Math.max(max, page.position), 0);
 
-    setPageItems((current) => [...current, { id: tempId, title: "Nowa strona", parentBlockId, position: maxPosition + 1 }]);
+    setPageItems((current) => [...current, { id: tempId, title: "Nowa strona", icon: "📝", parentBlockId, position: maxPosition + 1 }]);
     if (parentBlockId) setExpandedPageIds((current) => new Set(current).add(parentBlockId));
 
     startTransition(async () => {
@@ -120,7 +121,7 @@ export function NotesTreeSidebar({ workspaceId, workspaceSlug, isCollapsed, page
       }
 
       const payload = (await response.json()) as {
-        data?: { id: string; parent_block_id: string | null; position: number; properties?: { title?: string } };
+        data?: { id: string; parent_block_id: string | null; position: number; properties?: { title?: string; icon?: string } };
       };
 
       if (!payload.data) {
@@ -136,6 +137,7 @@ export function NotesTreeSidebar({ workspaceId, workspaceSlug, isCollapsed, page
                 parentBlockId: payload.data!.parent_block_id,
                 position: payload.data!.position,
                 title: payload.data!.properties?.title?.trim() || "Nowa strona",
+                icon: payload.data!.properties?.icon?.trim() || "📝",
               }
             : page
         )

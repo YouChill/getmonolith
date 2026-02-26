@@ -135,6 +135,7 @@ export async function POST(request: Request) {
         position: nextPosition,
         properties: {
           title: body.title.trim(),
+          icon: "📝",
         },
         content: [],
       })

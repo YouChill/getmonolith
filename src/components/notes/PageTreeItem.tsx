@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronDown, ChevronRight, FileText, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface SidebarPageItem {
@@ -9,6 +9,7 @@ export interface SidebarPageItem {
   title: string;
   parentBlockId: string | null;
   position: number;
+  icon?: string;
 }
 
 interface PageTreeItemProps {
@@ -74,7 +75,7 @@ export function PageTreeItem({
           style={!isCollapsed ? { marginLeft: `${depth * 12}px` } : undefined}
           title={page.title}
         >
-          <FileText className="h-3.5 w-3.5 shrink-0" />
+          <span className="shrink-0">{page.icon || "📝"}</span>
           {!isCollapsed && <span className="ml-2 truncate">{page.title}</span>}
         </Link>
 

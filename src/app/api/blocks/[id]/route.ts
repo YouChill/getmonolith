@@ -11,6 +11,7 @@ interface UpdateBlockPayload {
   position?: number;
   parent_block_id?: string | null;
   content?: unknown;
+  icon?: string;
 }
 
 interface BlockProperties {
@@ -19,6 +20,7 @@ interface BlockProperties {
   due_date?: string;
   priority?: "low" | "medium" | "high" | "urgent";
   assigned_to?: string;
+  icon?: string;
 }
 
 interface AccessibleBlock {
@@ -118,7 +120,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     typeof body.priority !== "undefined" ||
     typeof body.assigned_to !== "undefined" ||
     typeof body.parent_block_id !== "undefined" ||
-    typeof body.content !== "undefined";
+    typeof body.content !== "undefined" ||
+    typeof body.icon !== "undefined";
 
   if (!hasUpdatableFields) {
     return NextResponse.json({ data: null, error: "Brak danych do aktualizacji." }, { status: 400 });
@@ -158,6 +161,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       }
     }
   }
+  if (access.data.type === "page" && typeof body.icon === "string") {
+    nextProperties.icon = body.icon.trim() || "📝";
+  }
+
 
   const { data, error } = await access.supabase
     .from("blocks")

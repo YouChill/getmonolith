@@ -43,7 +43,7 @@ interface SidebarProps {
   workspaceId: string;
   workspaces: WorkspaceItem[];
   projects: ProjectItem[];
-  pages: Array<{ id: string; parent_block_id: string | null; position: number; properties: { title?: string } | null }>;
+  pages: Array<{ id: string; parent_block_id: string | null; position: number; properties: { title?: string; icon?: string } | null }>;
 }
 
 interface SidebarLinkProps {
