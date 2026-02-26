@@ -16,6 +16,9 @@ import { useMemo, useState } from "react";
 import { KanbanCard } from "@/components/board/KanbanCard";
 import { KanbanColumn, type KanbanTaskCard } from "@/components/board/KanbanColumn";
 import { TASK_STATUSES, type TaskStatus } from "@/lib/db/types";
+import { useBoardFiltersStore, type BoardSortOption } from "@/lib/stores/board-filters-store";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 interface KanbanBoardProps {
   workspaceSlug: string;
@@ -45,6 +48,19 @@ const COLUMN_TITLES: Record<TaskStatus, string> = {
   todo: "Todo",
   in_progress: "In Progress",
   done: "Done",
+};
+
+const SORT_OPTIONS: Array<{ value: BoardSortOption; label: string }> = [
+  { value: "position", label: "Po pozycji" },
+  { value: "due_date", label: "Po due date" },
+  { value: "priority", label: "Po priorytecie" },
+];
+
+const PRIORITY_ORDER: Record<NonNullable<KanbanTaskCard["priority"]>, number> = {
+  urgent: 4,
+  high: 3,
+  medium: 2,
+  low: 1,
 };
 
 function isTaskStatus(value: string): value is TaskStatus {
@@ -167,6 +183,8 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
     in_progress: false,
     done: false,
   });
+  const { searchQuery, priority, assignee, sortBy, setSearchQuery, setPriority, setAssignee, setSortBy, resetFilters } =
+    useBoardFiltersStore();
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
@@ -188,6 +206,122 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
 
     return null;
   }, [activeTaskId, boardColumns]);
+
+  const assigneeOptions = useMemo(() => {
+    const uniqueAssignees = new Set<string>();
+
+    for (const status of TASK_STATUSES) {
+      for (const card of boardColumns[status]) {
+        if (card.assignee) {
+          uniqueAssignees.add(card.assignee);
+        }
+      }
+    }
+
+    return Array.from(uniqueAssignees).sort((left, right) => left.localeCompare(right));
+  }, [boardColumns]);
+
+  const visibleColumns = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    const sortCards = (cards: KanbanTaskCard[]) => {
+      if (sortBy === "position") {
+        return [...cards].sort((left, right) => left.position - right.position);
+      }
+
+      if (sortBy === "due_date") {
+        return [...cards].sort((left, right) => {
+          const leftDate = left.dueDate ? new Date(left.dueDate).getTime() : Number.POSITIVE_INFINITY;
+          const rightDate = right.dueDate ? new Date(right.dueDate).getTime() : Number.POSITIVE_INFINITY;
+
+          if (leftDate === rightDate) {
+            return left.position - right.position;
+          }
+
+          return leftDate - rightDate;
+        });
+      }
+
+      return [...cards].sort((left, right) => {
+        const leftPriority = left.priority ? PRIORITY_ORDER[left.priority] : 0;
+        const rightPriority = right.priority ? PRIORITY_ORDER[right.priority] : 0;
+
+        if (leftPriority === rightPriority) {
+          return left.position - right.position;
+        }
+
+        return rightPriority - leftPriority;
+      });
+    };
+
+    return {
+      todo: sortCards(
+        boardColumns.todo.filter((card) => {
+          if (query && !card.title.toLowerCase().includes(query)) {
+            return false;
+          }
+
+          if (priority !== "all" && card.priority !== priority) {
+            return false;
+          }
+
+          if (assignee === "all") {
+            return true;
+          }
+
+          if (assignee === "unassigned") {
+            return !card.assignee;
+          }
+
+          return card.assignee === assignee;
+        })
+      ),
+      in_progress: sortCards(
+        boardColumns.in_progress.filter((card) => {
+          if (query && !card.title.toLowerCase().includes(query)) {
+            return false;
+          }
+
+          if (priority !== "all" && card.priority !== priority) {
+            return false;
+          }
+
+          if (assignee === "all") {
+            return true;
+          }
+
+          if (assignee === "unassigned") {
+            return !card.assignee;
+          }
+
+          return card.assignee === assignee;
+        })
+      ),
+      done: sortCards(
+        boardColumns.done.filter((card) => {
+          if (query && !card.title.toLowerCase().includes(query)) {
+            return false;
+          }
+
+          if (priority !== "all" && card.priority !== priority) {
+            return false;
+          }
+
+          if (assignee === "all") {
+            return true;
+          }
+
+          if (assignee === "unassigned") {
+            return !card.assignee;
+          }
+
+          return card.assignee === assignee;
+        })
+      ),
+    };
+  }, [assignee, boardColumns, priority, searchQuery, sortBy]);
+
+  const isPositionSort = sortBy === "position";
 
   const handleCreateTask = async (status: TaskStatus, title: string) => {
     const optimisticId = `optimistic-${Date.now()}`;
@@ -285,11 +419,19 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
   };
 
   const handleDragStart = (event: DragStartEvent) => {
+    if (!isPositionSort) {
+      return;
+    }
+
     setActiveTaskId(String(event.active.id));
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
     setActiveTaskId(null);
+
+    if (!isPositionSort) {
+      return;
+    }
 
     if (!event.over) {
       return;
@@ -336,6 +478,65 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
+      <div className="mb-4 grid grid-cols-1 gap-3 rounded-xl border border-border-subtle bg-bg-base p-3 md:grid-cols-2 xl:grid-cols-5">
+        <Input
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Szukaj po tytule..."
+          aria-label="Szukaj kart"
+          className="xl:col-span-2"
+        />
+
+        <select
+          value={priority}
+          onChange={(event) => setPriority(event.target.value as "all" | "high" | "medium" | "low")}
+          className="h-10 rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+          aria-label="Filtr priorytetu"
+        >
+          <option value="all">Priorytet: wszystkie</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+
+        <select
+          value={assignee}
+          onChange={(event) => setAssignee(event.target.value)}
+          className="h-10 rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+          aria-label="Filtr użytkownika"
+        >
+          <option value="all">Przypisany: wszyscy</option>
+          <option value="unassigned">Nieprzypisane</option>
+          {assigneeOptions.map((assigneeOption) => (
+            <option key={assigneeOption} value={assigneeOption}>
+              {assigneeOption}
+            </option>
+          ))}
+        </select>
+
+        <div className="flex items-center gap-2">
+          <select
+            value={sortBy}
+            onChange={(event) => setSortBy(event.target.value as BoardSortOption)}
+            className="h-10 flex-1 rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+            aria-label="Sortowanie kart"
+          >
+            {SORT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <Button type="button" variant="ghost" onClick={resetFilters}>
+            Reset
+          </Button>
+        </div>
+      </div>
+
+      {!isPositionSort ? (
+        <p className="mb-4 text-xs text-content-muted">Przeciąganie kart działa tylko przy sortowaniu "Po pozycji".</p>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {TASK_STATUSES.map((status) => (
           <KanbanColumn
@@ -343,8 +544,9 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
             title={COLUMN_TITLES[status]}
             status={status}
             workspaceSlug={workspaceSlug}
-            cards={boardColumns[status]}
+            cards={visibleColumns[status]}
             isCreating={creatingByStatus[status]}
+            disableDrag={!isPositionSort}
             onCreateTask={handleCreateTask}
             onUpdateTask={handleUpdateTask}
             onDeleteTask={handleDeleteTask}

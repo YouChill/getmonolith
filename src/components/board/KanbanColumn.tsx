@@ -30,6 +30,7 @@ interface KanbanColumnProps {
   workspaceSlug: string;
   cards: KanbanTaskCard[];
   isCreating: boolean;
+  disableDrag: boolean;
   onCreateTask: (status: TaskStatus, title: string) => Promise<void>;
   onUpdateTask: (taskId: string, payload: UpdateTaskPayload) => Promise<void>;
   onDeleteTask: (taskId: string) => Promise<void>;
@@ -38,18 +39,20 @@ interface KanbanColumnProps {
 function SortableTaskCard({
   card,
   workspaceSlug,
+  disableDrag,
   onUpdateTask,
   onDeleteTask,
 }: {
   card: KanbanTaskCard;
   workspaceSlug: string;
+  disableDrag: boolean;
   onUpdateTask: (taskId: string, payload: UpdateTaskPayload) => Promise<void>;
   onDeleteTask: (taskId: string) => Promise<void>;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
     data: { type: "task", status: card.status },
-    disabled: card.isOptimistic,
+    disabled: card.isOptimistic || disableDrag,
   });
 
   return (
@@ -79,6 +82,7 @@ export function KanbanColumn({
   workspaceSlug,
   cards,
   isCreating,
+  disableDrag,
   onCreateTask,
   onUpdateTask,
   onDeleteTask,
@@ -125,6 +129,7 @@ export function KanbanColumn({
                 key={card.id}
                 card={card}
                 workspaceSlug={workspaceSlug}
+                disableDrag={disableDrag}
                 onUpdateTask={onUpdateTask}
                 onDeleteTask={onDeleteTask}
               />
