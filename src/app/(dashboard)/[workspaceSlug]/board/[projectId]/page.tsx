@@ -1,8 +1,32 @@
 import { notFound, redirect } from "next/navigation";
+import { KanbanBoard } from "@/components/board/KanbanBoard";
+import type { KanbanTaskCard } from "@/components/board/KanbanColumn";
+import type { TaskStatus } from "@/lib/db/types";
 import { createServerClient } from "@/lib/supabase/server";
 
 interface ProjectBoardPageProps {
   params: Promise<{ workspaceSlug: string; projectId: string }>;
+}
+
+interface TaskBlockProperties {
+  title?: string;
+  status?: TaskStatus;
+  due_date?: string;
+  priority?: "low" | "medium" | "high" | "urgent";
+  assigned_to?: string;
+}
+
+interface TaskBlock {
+  id: string;
+  properties: TaskBlockProperties;
+}
+
+function normalizeTaskStatus(status?: string): TaskStatus {
+  if (status === "todo" || status === "in_progress" || status === "done") {
+    return status;
+  }
+
+  return "todo";
 }
 
 export default async function ProjectBoardPage({ params }: ProjectBoardPageProps) {
@@ -49,20 +73,43 @@ export default async function ProjectBoardPage({ params }: ProjectBoardPageProps
     notFound();
   }
 
+  const { data: tasks } = await supabase
+    .from("blocks")
+    .select("id, properties")
+    .eq("workspace_id", workspace.id)
+    .eq("project_id", project.id)
+    .eq("type", "task")
+    .order("position", { ascending: true });
+
+  const columns: Record<TaskStatus, KanbanTaskCard[]> = {
+    todo: [],
+    in_progress: [],
+    done: [],
+  };
+
+  for (const task of (tasks ?? []) as TaskBlock[]) {
+    const status = normalizeTaskStatus(task.properties?.status);
+
+    columns[status].push({
+      id: task.id,
+      title: task.properties?.title?.trim() || "Bez tytułu",
+      priority: task.properties?.priority,
+      dueDate: task.properties?.due_date,
+      assignee: task.properties?.assigned_to,
+    });
+  }
+
   return (
     <div className="px-8 py-6">
-      <div className="max-w-[900px] rounded-lg border border-border-subtle bg-bg-surface p-6">
-        <div className="flex items-center gap-3">
-          <span className="text-3xl">{project.icon ?? "📁"}</span>
-          <div>
-            <h1 className="text-2xl font-semibold text-content-primary">{project.name}</h1>
-            <p className="text-sm text-content-muted">Kanban projektu w przygotowaniu.</p>
-          </div>
-        </div>
-        <div className="mt-6 rounded-md border border-border-subtle bg-bg-base p-4 text-sm text-content-secondary">
-          Kolor projektu: <span style={{ color: project.color ?? "#38BDF8" }}>{project.color ?? "#38BDF8"}</span>
+      <div className="mb-6 flex items-center gap-3">
+        <span className="text-3xl">{project.icon ?? "📁"}</span>
+        <div>
+          <h1 className="text-2xl font-semibold text-content-primary">{project.name}</h1>
+          <p className="text-sm text-content-muted">Tablica Kanban dla zadań projektu.</p>
         </div>
       </div>
+
+      <KanbanBoard workspaceSlug={workspaceSlug} columns={columns} />
     </div>
   );
 }
