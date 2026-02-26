@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, Flag, Pencil, Trash2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,8 +12,9 @@ import { blockQueryKey } from "@/lib/react-query/query-keys";
 interface KanbanCardProps {
   workspaceSlug: string;
   card: KanbanTaskCard;
-  onUpdateTask: (taskId: string, payload: { title?: string; status?: TaskStatus; due_date?: string | null }) => Promise<void>;
+  onUpdateTask: (taskId: string, payload: { title?: string; status?: TaskStatus; due_date?: string | null; assigned_to?: string | null }) => Promise<void>;
   onDeleteTask: (taskId: string) => Promise<void>;
+  assigneeOptions: Array<{ id: string; label: string }>;
   hideActions?: boolean;
   disableLink?: boolean;
   dragHandle?: ReactNode;
@@ -27,51 +28,25 @@ const PRIORITY_LABELS: Record<NonNullable<KanbanTaskCard["priority"]>, string> =
 };
 
 function formatDueDate(dueDate?: string): string {
-  if (!dueDate) {
-    return "Brak terminu";
-  }
-
+  if (!dueDate) return "Brak terminu";
   const date = new Date(dueDate);
-
-  if (Number.isNaN(date.getTime())) {
-    return dueDate;
-  }
-
-  return new Intl.DateTimeFormat("pl-PL", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(date);
+  if (Number.isNaN(date.getTime())) return dueDate;
+  return new Intl.DateTimeFormat("pl-PL", { day: "2-digit", month: "short", year: "numeric" }).format(date);
 }
 
 function isOverdue(dueDate?: string, status?: TaskStatus): boolean {
-  if (!dueDate || status === "done") {
-    return false;
-  }
-
+  if (!dueDate || status === "done") return false;
   const due = new Date(dueDate);
-
-  if (Number.isNaN(due.getTime())) {
-    return false;
-  }
-
+  if (Number.isNaN(due.getTime())) return false;
   due.setHours(0, 0, 0, 0);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-
   return due.getTime() < today.getTime();
 }
 
-function formatAssignee(assignee?: string): string {
-  if (!assignee) {
-    return "Nieprzypisane";
-  }
-
-  if (assignee.length <= 10) {
-    return assignee;
-  }
-
-  return `${assignee.slice(0, 8)}…`;
+function getAssigneeInitials(value?: string) {
+  if (!value) return "?";
+  return value.slice(0, 2).toUpperCase();
 }
 
 export function KanbanCard({
@@ -79,6 +54,7 @@ export function KanbanCard({
   card,
   onUpdateTask,
   onDeleteTask,
+  assigneeOptions,
   hideActions = false,
   disableLink = false,
   dragHandle,
@@ -87,35 +63,35 @@ export function KanbanCard({
   const [title, setTitle] = useState(card.title);
   const [status, setStatus] = useState<TaskStatus>(card.status);
   const [dueDate, setDueDate] = useState(card.dueDate ?? "");
+  const [assignee, setAssignee] = useState(card.assignee ?? "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const queryClient = useQueryClient();
 
+  const assigneeLabel = useMemo(
+    () => assigneeOptions.find((option) => option.id === card.assignee)?.label ?? card.assignee ?? "Nieprzypisane",
+    [assigneeOptions, card.assignee]
+  );
+
   const prefetchBlock = () => {
-    queryClient.prefetchQuery({
-      queryKey: blockQueryKey(card.id),
-      queryFn: async () => {
-        const response = await fetch(`/api/blocks/${card.id}`);
-        const result = (await response.json()) as { data: unknown; error: string | null };
-
-        if (!response.ok || !result.data) {
-          throw new Error(result.error ?? "Nie udało się pobrać bloku.");
-        }
-
-        return result.data;
-      },
-      staleTime: 30_000,
-    }).catch(() => undefined);
+    queryClient
+      .prefetchQuery({
+        queryKey: blockQueryKey(card.id),
+        queryFn: async () => {
+          const response = await fetch(`/api/blocks/${card.id}`);
+          const result = (await response.json()) as { data: unknown; error: string | null };
+          if (!response.ok || !result.data) throw new Error(result.error ?? "Nie udało się pobrać bloku.");
+          return result.data;
+        },
+        staleTime: 30_000,
+      })
+      .catch(() => undefined);
   };
 
   const handleSave = async () => {
     const trimmedTitle = title.trim();
-
-    if (!trimmedTitle) {
-      return;
-    }
-
+    if (!trimmedTitle) return;
     setIsSubmitting(true);
-    await onUpdateTask(card.id, { title: trimmedTitle, status, due_date: dueDate || null });
+    await onUpdateTask(card.id, { title: trimmedTitle, status, due_date: dueDate || null, assigned_to: assignee || null });
     setIsSubmitting(false);
     setIsEditing(false);
   };
@@ -154,18 +130,18 @@ export function KanbanCard({
         </div>
 
         <div className="flex items-center gap-1.5">
+          <div className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-bg-elevated text-[10px] font-semibold text-content-secondary">
+            {getAssigneeInitials(card.assignee)}
+          </div>
           <User className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>{formatAssignee(card.assignee)}</span>
+          <span>{assigneeLabel}</span>
         </div>
       </div>
     </>
   );
 
   return (
-    <div
-      className="rounded-lg border border-border-subtle bg-bg-surface p-3 transition-all duration-150 hover:-translate-y-px hover:border-border-default hover:bg-bg-elevated hover:shadow-md"
-      data-optimistic={card.isOptimistic ? "true" : "false"}
-    >
+    <div className="rounded-lg border border-border-subtle bg-bg-surface p-3 transition-all duration-150 hover:-translate-y-px hover:border-border-default hover:bg-bg-elevated hover:shadow-md" data-optimistic={card.isOptimistic ? "true" : "false"}>
       {disableLink ? content : <Link href={`/${workspaceSlug}/block/${card.id}`} className="block" onMouseEnter={prefetchBlock} onFocus={prefetchBlock}>{content}</Link>}
 
       {!card.isOptimistic && !hideActions ? (
@@ -173,23 +149,21 @@ export function KanbanCard({
           {isEditing ? (
             <div className="mt-2 space-y-2 rounded-md border border-border-subtle bg-bg-base p-2">
               <Input value={title} onChange={(event) => setTitle(event.target.value)} />
-              <select
-                value={status}
-                onChange={(event) => setStatus(event.target.value as TaskStatus)}
-                className="w-full rounded-md border border-border-default bg-bg-base px-2 py-1.5 text-xs text-content-primary outline-none ring-offset-bg-base focus-visible:ring-2 focus-visible:ring-ring"
-              >
+              <select value={status} onChange={(event) => setStatus(event.target.value as TaskStatus)} className="w-full rounded-md border border-border-default bg-bg-base px-2 py-1.5 text-xs text-content-primary outline-none ring-offset-bg-base focus-visible:ring-2 focus-visible:ring-ring">
                 <option value="todo">Todo</option>
                 <option value="in_progress">In Progress</option>
                 <option value="done">Done</option>
               </select>
               <DatePicker value={dueDate} onChange={handleDueDateChange} placeholder="Ustaw termin" />
+              <select value={assignee} onChange={(event) => setAssignee(event.target.value)} className="w-full rounded-md border border-border-default bg-bg-base px-2 py-1.5 text-xs text-content-primary outline-none ring-offset-bg-base focus-visible:ring-2 focus-visible:ring-ring">
+                <option value="">Nieprzypisane</option>
+                {assigneeOptions.map((option) => (
+                  <option key={option.id} value={option.id}>{option.label}</option>
+                ))}
+              </select>
               <div className="flex justify-end gap-2">
-                <Button type="button" size="sm" variant="ghost" onClick={() => setIsEditing(false)} disabled={isSubmitting}>
-                  Cancel
-                </Button>
-                <Button type="button" size="sm" onClick={handleSave} disabled={isSubmitting || !title.trim()}>
-                  Save
-                </Button>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setIsEditing(false)} disabled={isSubmitting}>Cancel</Button>
+                <Button type="button" size="sm" onClick={handleSave} disabled={isSubmitting || !title.trim()}>Save</Button>
               </div>
             </div>
           ) : (

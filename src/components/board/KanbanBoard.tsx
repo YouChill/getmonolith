@@ -21,6 +21,7 @@ import { useBoardFiltersStore, type BoardSortOption } from "@/lib/stores/board-f
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { boardColumnsQueryKey } from "@/lib/react-query/query-keys";
+import { useWorkspace } from "@/lib/hooks/use-workspace";
 
 interface KanbanBoardProps {
   workspaceSlug: string;
@@ -208,6 +209,7 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
   });
   const { searchQuery, priority, assignee, sortBy, setSearchQuery, setPriority, setAssignee, setSortBy, resetFilters } =
     useBoardFiltersStore();
+  const { data: workspaceData } = useWorkspace(workspaceId);
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
@@ -231,6 +233,12 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
   }, [activeTaskId, boardColumns]);
 
   const assigneeOptions = useMemo(() => {
+    const fromWorkspace = workspaceData?.members ?? [];
+
+    if (fromWorkspace.length > 0) {
+      return fromWorkspace;
+    }
+
     const uniqueAssignees = new Set<string>();
 
     for (const status of TASK_STATUSES) {
@@ -241,8 +249,10 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
       }
     }
 
-    return Array.from(uniqueAssignees).sort((left, right) => left.localeCompare(right));
-  }, [boardColumns]);
+    return Array.from(uniqueAssignees)
+      .sort((left, right) => left.localeCompare(right))
+      .map((id) => ({ id, label: id }));
+  }, [boardColumns, workspaceData?.members]);
 
   const visibleColumns = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -288,14 +298,9 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
             return false;
           }
 
-          if (assignee === "all") {
-            return true;
-          }
-
-          if (assignee === "unassigned") {
-            return !card.assignee;
-          }
-
+          if (assignee === "all") return true;
+          if (assignee === "mine") return card.assignee === workspaceData?.currentUserId;
+          if (assignee === "unassigned") return !card.assignee;
           return card.assignee === assignee;
         })
       ),
@@ -309,14 +314,9 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
             return false;
           }
 
-          if (assignee === "all") {
-            return true;
-          }
-
-          if (assignee === "unassigned") {
-            return !card.assignee;
-          }
-
+          if (assignee === "all") return true;
+          if (assignee === "mine") return card.assignee === workspaceData?.currentUserId;
+          if (assignee === "unassigned") return !card.assignee;
           return card.assignee === assignee;
         })
       ),
@@ -330,19 +330,14 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
             return false;
           }
 
-          if (assignee === "all") {
-            return true;
-          }
-
-          if (assignee === "unassigned") {
-            return !card.assignee;
-          }
-
+          if (assignee === "all") return true;
+          if (assignee === "mine") return card.assignee === workspaceData?.currentUserId;
+          if (assignee === "unassigned") return !card.assignee;
           return card.assignee === assignee;
         })
       ),
     };
-  }, [assignee, boardColumns, priority, searchQuery, sortBy]);
+  }, [assignee, boardColumns, priority, searchQuery, sortBy, workspaceData?.currentUserId]);
 
   const isPositionSort = sortBy === "position";
 
@@ -393,7 +388,7 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
     setCreatingByStatus((previous) => ({ ...previous, [status]: false }));
   };
 
-  const handleUpdateTask = async (taskId: string, payload: { title?: string; status?: TaskStatus; due_date?: string | null }) => {
+  const handleUpdateTask = async (taskId: string, payload: { title?: string; status?: TaskStatus; due_date?: string | null; assigned_to?: string | null }) => {
     const snapshot = boardColumns;
 
     updateBoardColumns((previous) => {
@@ -417,6 +412,7 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
         title: typeof payload.title === "string" ? payload.title : currentCard.title,
         status: nextStatus,
         dueDate: typeof payload.due_date !== "undefined" ? payload.due_date ?? undefined : currentCard.dueDate,
+        assignee: typeof payload.assigned_to !== "undefined" ? payload.assigned_to ?? undefined : currentCard.assignee,
       });
     });
 
@@ -556,10 +552,11 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
           aria-label="Filtr użytkownika"
         >
           <option value="all">Przypisany: wszyscy</option>
+          <option value="mine">Moje zadania</option>
           <option value="unassigned">Nieprzypisane</option>
           {assigneeOptions.map((assigneeOption) => (
-            <option key={assigneeOption} value={assigneeOption}>
-              {assigneeOption}
+            <option key={assigneeOption.id} value={assigneeOption.id}>
+              {assigneeOption.label}
             </option>
           ))}
         </select>
@@ -600,6 +597,7 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
             onCreateTask={handleCreateTask}
             onUpdateTask={handleUpdateTask}
             onDeleteTask={handleDeleteTask}
+            assigneeOptions={assigneeOptions}
           />
         ))}
       </div>
@@ -612,6 +610,7 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
               card={activeTask}
               onDeleteTask={async () => undefined}
               onUpdateTask={async () => undefined}
+              assigneeOptions={assigneeOptions}
               hideActions
               disableLink
             />
