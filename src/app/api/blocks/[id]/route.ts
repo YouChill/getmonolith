@@ -45,6 +45,10 @@ function isPriority(value?: string): value is NonNullable<BlockProperties["prior
   return value === "low" || value === "medium" || value === "high" || value === "urgent";
 }
 
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 async function ensureBlockAccess(blockId: string, userId: string) {
   const supabase = await createServerClient();
 
@@ -109,6 +113,23 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
     if (typeof body.priority === "string" && !isPriority(body.priority)) {
       return NextResponse.json({ data: null, error: "Nieprawidłowy priorytet zadania." }, { status: 400 });
+    }
+
+    if (typeof body.assigned_to === "string") {
+      if (!isUuid(body.assigned_to)) {
+        return NextResponse.json({ data: null, error: "assigned_to musi być UUID." }, { status: 400 });
+      }
+
+      const { data: assigneeMembership, error: assigneeError } = await access.supabase
+        .from("workspace_members")
+        .select("user_id")
+        .eq("workspace_id", access.data.workspace_id)
+        .eq("user_id", body.assigned_to)
+        .single();
+
+      if (assigneeError || !assigneeMembership) {
+        return NextResponse.json({ data: null, error: "Użytkownik nie należy do workspace." }, { status: 400 });
+      }
     }
   }
 

@@ -12,6 +12,7 @@ import type { BlockNoteContent } from "@/lib/types/blocknote";
 import type { TaskStatus } from "@/lib/db/types";
 import type { KanbanTaskCard } from "@/components/board/KanbanColumn";
 import { blockQueryKey, boardColumnsQueryKey } from "@/lib/react-query/query-keys";
+import { useWorkspace } from "@/lib/hooks/use-workspace";
 
 type TaskPriority = "low" | "medium" | "high" | "urgent";
 
@@ -26,6 +27,7 @@ interface BlockPageTaskData {
 
 interface BlockPageProps {
   workspaceSlug: string;
+  workspaceId: string;
   blockId: string;
   blockType: "task" | "page";
   projectId?: string;
@@ -34,7 +36,6 @@ interface BlockPageProps {
   initialIcon?: string;
   initialContent: BlockNoteContent;
   taskData?: BlockPageTaskData;
-  assignees: Array<{ id: string; email: string }>;
 }
 
 const STATUS_OPTIONS: Array<{ value: TaskStatus; label: string }> = [
@@ -93,6 +94,7 @@ function upsertTaskCardInColumns(
 
 export function BlockPage({
   workspaceSlug,
+  workspaceId,
   blockId,
   blockType,
   projectId,
@@ -101,7 +103,6 @@ export function BlockPage({
   initialIcon,
   initialContent,
   taskData,
-  assignees,
 }: BlockPageProps) {
   const [title, setTitle] = useState(initialTitle);
   const [icon, setIcon] = useState(initialIcon ?? "📝");
@@ -114,6 +115,7 @@ export function BlockPage({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const queryClient = useQueryClient();
+  const { data: workspaceData } = useWorkspace(workspaceId);
 
   const initialPayloadRef = useRef("");
 
@@ -213,7 +215,7 @@ export function BlockPage({
                   position: typeof updatedBlock.position === "number" ? updatedBlock.position : 1,
                   priority: updatedBlock.properties?.priority,
                   dueDate: updatedBlock.properties?.due_date,
-                  assignee: updatedBlock.properties?.assigned_to,
+              assignee: updatedBlock.properties?.assigned_to,
                 });
               }
             );
@@ -343,16 +345,16 @@ export function BlockPage({
           </label>
 
           <label className="block text-xs text-content-muted">
-            Assignee
+            Przypisane do
             <select
               value={assignee}
               onChange={(event) => setAssignee(event.target.value)}
               className="mt-1 h-9 w-full rounded-md border border-border-default bg-bg-base px-3 text-sm text-content-primary"
             >
               <option value="">Nieprzypisane</option>
-              {assignees.map((member) => (
+              {(workspaceData?.members ?? []).map((member) => (
                 <option key={member.id} value={member.id}>
-                  {member.email}
+                  {member.label}
                 </option>
               ))}
             </select>

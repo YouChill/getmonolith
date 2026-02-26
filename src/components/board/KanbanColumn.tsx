@@ -23,6 +23,7 @@ interface UpdateTaskPayload {
   title?: string;
   status?: TaskStatus;
   due_date?: string | null;
+  assigned_to?: string | null;
 }
 
 interface KanbanColumnProps {
@@ -35,6 +36,7 @@ interface KanbanColumnProps {
   onCreateTask: (status: TaskStatus, title: string) => Promise<void>;
   onUpdateTask: (taskId: string, payload: UpdateTaskPayload) => Promise<void>;
   onDeleteTask: (taskId: string) => Promise<void>;
+  assigneeOptions: Array<{ id: string; label: string }>;
 }
 
 function SortableTaskCard({
@@ -43,12 +45,14 @@ function SortableTaskCard({
   disableDrag,
   onUpdateTask,
   onDeleteTask,
+  assigneeOptions,
 }: {
   card: KanbanTaskCard;
   workspaceSlug: string;
   disableDrag: boolean;
   onUpdateTask: (taskId: string, payload: UpdateTaskPayload) => Promise<void>;
   onDeleteTask: (taskId: string) => Promise<void>;
+  assigneeOptions: Array<{ id: string; label: string }>;
 }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
@@ -70,6 +74,7 @@ function SortableTaskCard({
         workspaceSlug={workspaceSlug}
         onUpdateTask={onUpdateTask}
         onDeleteTask={onDeleteTask}
+        assigneeOptions={assigneeOptions}
         dragHandle={
           !disableDrag ? (
             <button
@@ -99,6 +104,7 @@ export function KanbanColumn({
   onCreateTask,
   onUpdateTask,
   onDeleteTask,
+  assigneeOptions,
 }: KanbanColumnProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -145,6 +151,7 @@ export function KanbanColumn({
                 disableDrag={disableDrag}
                 onUpdateTask={onUpdateTask}
                 onDeleteTask={onDeleteTask}
+                assigneeOptions={assigneeOptions}
               />
             ))
           )}

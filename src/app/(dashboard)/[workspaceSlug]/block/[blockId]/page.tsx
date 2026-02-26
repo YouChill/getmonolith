@@ -81,14 +81,10 @@ export default async function WorkspaceBlockPage({ params }: BlockPageRouteProps
     ? await supabase.from("projects").select("id, name").eq("id", block.project_id).maybeSingle()
     : { data: null };
 
-  const { data: members } = await supabase
-    .from("workspace_members")
-    .select("user_id")
-    .eq("workspace_id", workspace.id);
-
   return (
     <BlockPage
       workspaceSlug={workspaceSlug}
+      workspaceId={workspace.id}
       blockId={block.id}
       blockType={block.type}
       projectId={project?.id ?? undefined}
@@ -106,7 +102,6 @@ export default async function WorkspaceBlockPage({ params }: BlockPageRouteProps
             }
           : undefined
       }
-      assignees={(members ?? []).map((member) => ({ id: member.user_id, email: member.user_id }))}
     />
   );
 }
