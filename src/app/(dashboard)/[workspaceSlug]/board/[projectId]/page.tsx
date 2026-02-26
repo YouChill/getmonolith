@@ -93,6 +93,7 @@ export default async function ProjectBoardPage({ params }: ProjectBoardPageProps
     columns[status].push({
       id: task.id,
       title: task.properties?.title?.trim() || "Bez tytułu",
+      status,
       priority: task.properties?.priority,
       dueDate: task.properties?.due_date,
       assignee: task.properties?.assigned_to,
@@ -109,7 +110,7 @@ export default async function ProjectBoardPage({ params }: ProjectBoardPageProps
         </div>
       </div>
 
-      <KanbanBoard workspaceSlug={workspaceSlug} columns={columns} />
+      <KanbanBoard workspaceSlug={workspaceSlug} workspaceId={workspace.id} projectId={project.id} columns={columns} />
     </div>
   );
 }
