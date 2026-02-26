@@ -2,10 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { BlockNoteEditor } from "@/components/editor/BlockNoteEditor";
 import type { BlockNoteContent } from "@/lib/types/blocknote";
 import type { TaskStatus } from "@/lib/db/types";
+import type { KanbanTaskCard } from "@/components/board/KanbanColumn";
+import { blockQueryKey, boardColumnsQueryKey } from "@/lib/react-query/query-keys";
 
 type TaskPriority = "low" | "medium" | "high" | "urgent";
 
@@ -22,6 +25,7 @@ interface BlockPageProps {
   workspaceSlug: string;
   blockId: string;
   blockType: "task" | "page";
+  projectId?: string;
   projectName?: string;
   initialTitle: string;
   initialContent: BlockNoteContent;
@@ -42,10 +46,50 @@ const PRIORITY_OPTIONS: Array<{ value: TaskPriority; label: string }> = [
   { value: "urgent", label: "Pilny" },
 ];
 
+function normalizeTaskStatus(status?: string): TaskStatus {
+  if (status === "todo" || status === "in_progress" || status === "done") {
+    return status;
+  }
+
+  return "todo";
+}
+
+function upsertTaskCardInColumns(
+  columns: Record<TaskStatus, KanbanTaskCard[]>,
+  nextCard: KanbanTaskCard,
+): Record<TaskStatus, KanbanTaskCard[]> {
+  const previousStatus = (Object.keys(columns) as TaskStatus[]).find((status) =>
+    columns[status].some((card) => card.id === nextCard.id)
+  );
+
+  if (previousStatus === nextCard.status) {
+    return {
+      ...columns,
+      [nextCard.status]: columns[nextCard.status].map((card) =>
+        card.id === nextCard.id ? { ...card, ...nextCard } : card
+      ),
+    };
+  }
+
+  const nextColumns: Record<TaskStatus, KanbanTaskCard[]> = {
+    todo: columns.todo.filter((card) => card.id !== nextCard.id),
+    in_progress: columns.in_progress.filter((card) => card.id !== nextCard.id),
+    done: columns.done.filter((card) => card.id !== nextCard.id),
+  };
+
+  nextColumns[nextCard.status] = [nextCard, ...nextColumns[nextCard.status]].map((card, index) => ({
+    ...card,
+    position: index + 1,
+  }));
+
+  return nextColumns;
+}
+
 export function BlockPage({
   workspaceSlug,
   blockId,
   blockType,
+  projectId,
   projectName,
   initialTitle,
   initialContent,
@@ -61,6 +105,7 @@ export function BlockPage({
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+  const queryClient = useQueryClient();
 
   const initialPayloadRef = useRef("");
 
@@ -115,8 +160,52 @@ export function BlockPage({
             body: payloadString,
           });
 
-          if (!response.ok) {
-            throw new Error("Nie udało się zapisać zmian.");
+          const result = (await response.json()) as {
+            data: {
+              id: string;
+              type: "task" | "page";
+              position?: number;
+              properties?: {
+                title?: string;
+                status?: TaskStatus;
+                due_date?: string;
+                priority?: TaskPriority;
+                assigned_to?: string;
+              };
+              content?: BlockNoteContent;
+            } | null;
+            error: string | null;
+          };
+
+          if (!response.ok || !result.data) {
+            throw new Error(result.error ?? "Nie udało się zapisać zmian.");
+          }
+
+          const updatedBlock = result.data;
+
+          queryClient.setQueryData(blockQueryKey(blockId), updatedBlock);
+
+          if (updatedBlock.type === "task" && projectId) {
+            queryClient.setQueryData<Record<TaskStatus, KanbanTaskCard[]> | undefined>(
+              boardColumnsQueryKey(workspaceSlug, projectId),
+              (previous) => {
+                if (!previous) {
+                  return previous;
+                }
+
+                const nextStatus = normalizeTaskStatus(updatedBlock.properties?.status);
+
+                return upsertTaskCardInColumns(previous, {
+                  id: updatedBlock.id,
+                  title: updatedBlock.properties?.title?.trim() || "Bez tytułu",
+                  status: nextStatus,
+                  position: typeof updatedBlock.position === "number" ? updatedBlock.position : 1,
+                  priority: updatedBlock.properties?.priority,
+                  dueDate: updatedBlock.properties?.due_date,
+                  assignee: updatedBlock.properties?.assigned_to,
+                });
+              }
+            );
           }
 
           initialPayloadRef.current = payloadString;
@@ -131,15 +220,21 @@ export function BlockPage({
     }, 1500);
 
     return () => clearTimeout(timer);
-  }, [blockId, payloadString, startTransition]);
+  }, [blockId, payloadString, projectId, queryClient, startTransition, workspaceSlug]);
 
   return (
     <div className="mx-auto flex w-full max-w-7xl gap-6 px-8 py-6">
       <section className="min-w-0 flex-1">
         <nav className="mb-4 flex items-center gap-2 text-sm text-content-muted">
-          <Link href={`/${workspaceSlug}/board`} className="hover:text-content-primary">
-            Projekty
-          </Link>
+          {projectId ? (
+            <Link href={`/${workspaceSlug}/board/${projectId}`} className="hover:text-content-primary">
+              ← Powrót do tablicy
+            </Link>
+          ) : (
+            <Link href={`/${workspaceSlug}/board`} className="hover:text-content-primary">
+              ← Powrót do tablicy
+            </Link>
+          )}
           {projectName ? (
             <>
               <span>/</span>

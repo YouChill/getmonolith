@@ -23,6 +23,9 @@ interface BlockProperties {
 interface AccessibleBlock {
   id: string;
   workspace_id: string;
+  project_id?: string | null;
+  content?: unknown;
+  position?: number;
   type: string;
   properties: BlockProperties | null;
 }
@@ -168,6 +171,38 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
   if (error || !data) {
     return NextResponse.json({ data: null, error: error?.message ?? "Nie udało się zaktualizować bloku." }, { status: 500 });
+  }
+
+  return NextResponse.json({ data, error: null });
+}
+
+export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
+  const supabase = await createServerClient();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return NextResponse.json({ data: null, error: "Unauthorized" }, { status: 401 });
+  }
+
+  const access = await ensureBlockAccess(id, user.id);
+
+  if (access.error || !access.data) {
+    return NextResponse.json({ data: null, error: access.error }, { status: access.status });
+  }
+
+  const { data, error } = await access.supabase
+    .from("blocks")
+    .select("id, type, workspace_id, project_id, properties, content, position")
+    .eq("id", id)
+    .single<AccessibleBlock>();
+
+  if (error || !data) {
+    return NextResponse.json({ data: null, error: error?.message ?? "Nie udało się pobrać bloku." }, { status: 500 });
   }
 
   return NextResponse.json({ data, error: null });

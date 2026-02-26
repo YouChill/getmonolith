@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createServerClient } from "@/lib/supabase/server";
 import { Sidebar, SidebarSkeleton } from "@/components/layout/Sidebar";
 import { Navbar } from "@/components/layout/Navbar";
+import { ReactQueryProvider } from "@/components/providers/ReactQueryProvider";
 
 interface WorkspaceLayoutProps {
   children: React.ReactNode;
@@ -67,7 +68,7 @@ async function DashboardShell({ children, workspaceSlug }: DashboardShellProps) 
     .order("created_at", { ascending: true });
 
   return (
-    <>
+    <ReactQueryProvider>
       <Sidebar
         currentWorkspaceSlug={workspaceSlug}
         workspaceId={currentWorkspace.id}
@@ -78,7 +79,7 @@ async function DashboardShell({ children, workspaceSlug }: DashboardShellProps) 
         <Navbar workspaceName={currentWorkspace.name} userEmail={user.email ?? user.id} />
         <main className="flex-1 overflow-y-auto bg-bg-base">{children}</main>
       </div>
-    </>
+    </ReactQueryProvider>
   );
 }
 
