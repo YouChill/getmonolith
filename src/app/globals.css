@@ -109,3 +109,20 @@
   ::-webkit-scrollbar-thumb { @apply bg-border-default rounded-full; }
   ::-webkit-scrollbar-thumb:hover { @apply bg-border-strong; }
 }
+
+@layer components {
+  .bn-container {
+    background-color: var(--color-bg-surface);
+    color: var(--color-content-primary);
+  }
+
+  .bn-editor,
+  .bn-side-menu,
+  .bn-formatting-toolbar,
+  .bn-slash-menu,
+  .bn-suggestion-menu {
+    background-color: var(--color-bg-elevated);
+    border-color: var(--color-border-default);
+    color: var(--color-content-primary);
+  }
+}
