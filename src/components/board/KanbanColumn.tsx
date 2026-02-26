@@ -2,7 +2,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useState } from "react";
-import { Check, Plus, X } from "lucide-react";
+import { Check, GripVertical, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { KanbanCard } from "@/components/board/KanbanCard";
@@ -49,7 +49,7 @@ function SortableTaskCard({
   onUpdateTask: (taskId: string, payload: UpdateTaskPayload) => Promise<void>;
   onDeleteTask: (taskId: string) => Promise<void>;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
     data: { type: "task", status: card.status },
     disabled: card.isOptimistic || disableDrag,
@@ -63,14 +63,26 @@ function SortableTaskCard({
         transition,
       }}
       className={isDragging ? "opacity-40" : undefined}
-      {...attributes}
-      {...listeners}
     >
       <KanbanCard
         card={card}
         workspaceSlug={workspaceSlug}
         onUpdateTask={onUpdateTask}
         onDeleteTask={onDeleteTask}
+        dragHandle={
+          !disableDrag ? (
+            <button
+              type="button"
+              ref={setActivatorNodeRef}
+              {...attributes}
+              {...listeners}
+              className="-mr-1 mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded text-content-muted transition hover:bg-bg-base hover:text-content-primary"
+              aria-label="Przeciągnij kartę"
+            >
+              <GripVertical className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          ) : null
+        }
       />
     </div>
   );
