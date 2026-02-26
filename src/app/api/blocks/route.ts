@@ -8,6 +8,8 @@ interface CreateBlockPayload {
   type?: string;
   title?: string;
   status?: TaskStatus;
+  dueDate?: string;
+  priority?: "low" | "medium" | "high" | "urgent";
 }
 
 function isTaskStatus(value?: string): value is TaskStatus {
@@ -16,6 +18,14 @@ function isTaskStatus(value?: string): value is TaskStatus {
   }
 
   return TASK_STATUSES.includes(value as TaskStatus);
+}
+
+function isDueDate(value?: string): boolean {
+  if (!value) {
+    return true;
+  }
+
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
 export async function POST(request: Request) {
@@ -46,6 +56,10 @@ export async function POST(request: Request) {
 
   if (!isTaskStatus(body.status)) {
     return NextResponse.json({ data: null, error: "Nieprawidłowy status zadania." }, { status: 400 });
+  }
+
+  if (!isDueDate(body.dueDate)) {
+    return NextResponse.json({ data: null, error: "Nieprawidłowy format due date (YYYY-MM-DD)." }, { status: 400 });
   }
 
   const { data: membership, error: membershipError } = await supabase
@@ -82,6 +96,8 @@ export async function POST(request: Request) {
       properties: {
         title: body.title.trim(),
         status: body.status,
+        due_date: body.dueDate,
+        priority: body.priority,
       },
     })
     .select("id, properties, position")
