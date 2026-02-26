@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, Flag, Pencil, Trash2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ interface KanbanCardProps {
   onDeleteTask: (taskId: string) => Promise<void>;
   hideActions?: boolean;
   disableLink?: boolean;
+  dragHandle?: ReactNode;
 }
 
 const PRIORITY_LABELS: Record<NonNullable<KanbanTaskCard["priority"]>, string> = {
@@ -54,7 +55,15 @@ function formatAssignee(assignee?: string): string {
   return `${assignee.slice(0, 8)}…`;
 }
 
-export function KanbanCard({ workspaceSlug, card, onUpdateTask, onDeleteTask, hideActions = false, disableLink = false }: KanbanCardProps) {
+export function KanbanCard({
+  workspaceSlug,
+  card,
+  onUpdateTask,
+  onDeleteTask,
+  hideActions = false,
+  disableLink = false,
+  dragHandle,
+}: KanbanCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(card.title);
   const [status, setStatus] = useState<TaskStatus>(card.status);
@@ -99,7 +108,10 @@ export function KanbanCard({ workspaceSlug, card, onUpdateTask, onDeleteTask, hi
 
   const content = (
     <>
-      <p className="line-clamp-2 text-sm font-medium text-content-primary">{card.title}</p>
+      <div className="flex items-start gap-2">
+        <p className="line-clamp-2 flex-1 text-sm font-medium text-content-primary">{card.title}</p>
+        {dragHandle ?? null}
+      </div>
 
       <div className="mt-3 space-y-1.5 text-xs text-content-muted">
         <div className="flex items-center gap-1.5">
