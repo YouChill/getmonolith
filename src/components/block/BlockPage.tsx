@@ -5,6 +5,8 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { BlockNoteEditor } from "@/components/editor/BlockNoteEditor";
 import type { BlockNoteContent } from "@/lib/types/blocknote";
 import type { TaskStatus } from "@/lib/db/types";
@@ -29,6 +31,7 @@ interface BlockPageProps {
   projectId?: string;
   projectName?: string;
   initialTitle: string;
+  initialIcon?: string;
   initialContent: BlockNoteContent;
   taskData?: BlockPageTaskData;
   assignees: Array<{ id: string; email: string }>;
@@ -46,6 +49,8 @@ const PRIORITY_OPTIONS: Array<{ value: TaskPriority; label: string }> = [
   { value: "high", label: "Wysoki" },
   { value: "urgent", label: "Pilny" },
 ];
+
+const PAGE_ICON_OPTIONS = ["📝", "📄", "📘", "📙", "📕", "📗", "📌", "📎", "💡", "✅", "🚀", "✨", "🔥", "📚", "🧠", "🎯"];
 
 function normalizeTaskStatus(status?: string): TaskStatus {
   if (status === "todo" || status === "in_progress" || status === "done") {
@@ -93,11 +98,13 @@ export function BlockPage({
   projectId,
   projectName,
   initialTitle,
+  initialIcon,
   initialContent,
   taskData,
   assignees,
 }: BlockPageProps) {
   const [title, setTitle] = useState(initialTitle);
+  const [icon, setIcon] = useState(initialIcon ?? "📝");
   const [content, setContent] = useState<BlockNoteContent>(initialContent);
   const [status, setStatus] = useState<TaskStatus>(taskData?.status ?? "todo");
   const [dueDate, setDueDate] = useState(taskData?.dueDate ?? "");
@@ -114,6 +121,7 @@ export function BlockPage({
     () => ({
       title: title.trim() || "Bez tytułu",
       content,
+      ...(blockType === "page" ? { icon } : {}),
       ...(blockType === "task"
         ? {
             status,
@@ -123,7 +131,7 @@ export function BlockPage({
           }
         : {}),
     }),
-    [assignee, blockType, content, dueDate, priority, status, title],
+    [assignee, blockType, content, dueDate, icon, priority, status, title],
   );
 
   const payloadString = JSON.stringify(payload);
@@ -132,6 +140,7 @@ export function BlockPage({
     initialPayloadRef.current = JSON.stringify({
       title: initialTitle.trim() || "Bez tytułu",
       content: initialContent,
+      ...(blockType === "page" ? { icon: initialIcon ?? "📝" } : {}),
       ...(blockType === "task"
         ? {
             status: taskData?.status ?? "todo",
@@ -141,7 +150,7 @@ export function BlockPage({
           }
         : {}),
     });
-  }, [blockType, initialContent, initialTitle, taskData?.assignee, taskData?.dueDate, taskData?.priority, taskData?.status]);
+  }, [blockType, initialContent, initialIcon, initialTitle, taskData?.assignee, taskData?.dueDate, taskData?.priority, taskData?.status]);
 
   useEffect(() => {
     if (payloadString === initialPayloadRef.current) {
@@ -168,6 +177,7 @@ export function BlockPage({
               position?: number;
               properties?: {
                 title?: string;
+                icon?: string;
                 status?: TaskStatus;
                 due_date?: string;
                 priority?: TaskPriority;
@@ -247,12 +257,42 @@ export function BlockPage({
         </nav>
 
         <div className="mb-4 flex items-center justify-between gap-4">
-          <Input
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            className="h-auto border-none bg-transparent px-0 text-3xl font-semibold text-content-primary shadow-none focus-visible:ring-0"
-            placeholder="Bez tytułu"
-          />
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            {blockType === "page" ? (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button type="button" variant="ghost" className="h-10 w-10 rounded-lg border border-border-default p-0 text-2xl">
+                    <span aria-hidden>{icon}</span>
+                    <span className="sr-only">Wybierz ikonę strony</span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-56">
+                  <div className="grid grid-cols-8 gap-1">
+                    {PAGE_ICON_OPTIONS.map((option) => (
+                      <Button
+                        key={option}
+                        type="button"
+                        variant="ghost"
+                        className="h-8 w-8 p-0 text-lg"
+                        onClick={() => setIcon(option)}
+                      >
+                        {option}
+                      </Button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            ) : null}
+
+            <h1 className="min-w-0 flex-1">
+              <Input
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                className="h-auto border-none bg-transparent px-0 text-3xl font-semibold text-content-primary shadow-none focus-visible:ring-0"
+                placeholder="Bez tytułu"
+              />
+            </h1>
+          </div>
 
           <span className="text-sm text-content-muted">{saveState === "saving" ? "Saving..." : "Saved"}</span>
         </div>

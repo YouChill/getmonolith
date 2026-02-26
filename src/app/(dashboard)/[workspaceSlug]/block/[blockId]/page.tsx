@@ -12,6 +12,7 @@ interface BlockPageRouteProps {
 
 interface BlockProperties {
   title?: string;
+  icon?: string;
   status?: TaskStatus;
   due_date?: string;
   priority?: TaskPriority;
@@ -93,6 +94,7 @@ export default async function WorkspaceBlockPage({ params }: BlockPageRouteProps
       projectId={project?.id ?? undefined}
       projectName={project?.name}
       initialTitle={block.properties?.title?.trim() || "Bez tytułu"}
+      initialIcon={block.type === "page" ? block.properties?.icon : undefined}
       initialContent={Array.isArray(block.content) ? block.content : []}
       taskData={
         block.type === "task"

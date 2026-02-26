@@ -15,7 +15,7 @@ interface WorkspaceRecord {
 interface RecentPage {
   id: string;
   updated_at: string;
-  properties: { title?: string } | null;
+  properties: { title?: string; icon?: string } | null;
 }
 
 export default async function NotesPage({ params }: NotesPageProps) {
