@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, Flag, Pencil, Trash2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { KanbanTaskCard } from "@/components/board/KanbanColumn";
 import type { TaskStatus } from "@/lib/db/types";
+import { blockQueryKey } from "@/lib/react-query/query-keys";
 
 interface KanbanCardProps {
   workspaceSlug: string;
@@ -57,6 +59,24 @@ export function KanbanCard({ workspaceSlug, card, onUpdateTask, onDeleteTask, hi
   const [title, setTitle] = useState(card.title);
   const [status, setStatus] = useState<TaskStatus>(card.status);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const queryClient = useQueryClient();
+
+  const prefetchBlock = () => {
+    queryClient.prefetchQuery({
+      queryKey: blockQueryKey(card.id),
+      queryFn: async () => {
+        const response = await fetch(`/api/blocks/${card.id}`);
+        const result = (await response.json()) as { data: unknown; error: string | null };
+
+        if (!response.ok || !result.data) {
+          throw new Error(result.error ?? "Nie udało się pobrać bloku.");
+        }
+
+        return result.data;
+      },
+      staleTime: 30_000,
+    }).catch(() => undefined);
+  };
 
   const handleSave = async () => {
     const trimmedTitle = title.trim();
@@ -105,7 +125,7 @@ export function KanbanCard({ workspaceSlug, card, onUpdateTask, onDeleteTask, hi
       className="rounded-lg border border-border-subtle bg-bg-surface p-3 transition-all duration-150 hover:-translate-y-px hover:border-border-default hover:bg-bg-elevated hover:shadow-md"
       data-optimistic={card.isOptimistic ? "true" : "false"}
     >
-      {disableLink ? content : <Link href={`/${workspaceSlug}/block/${card.id}`} className="block">{content}</Link>}
+      {disableLink ? content : <Link href={`/${workspaceSlug}/block/${card.id}`} className="block" onMouseEnter={prefetchBlock} onFocus={prefetchBlock}>{content}</Link>}
 
       {!card.isOptimistic && !hideActions ? (
         <>

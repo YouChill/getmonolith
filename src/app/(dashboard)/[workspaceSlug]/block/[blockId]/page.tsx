@@ -77,7 +77,7 @@ export default async function WorkspaceBlockPage({ params }: BlockPageRouteProps
   }
 
   const { data: project } = block.project_id
-    ? await supabase.from("projects").select("name").eq("id", block.project_id).maybeSingle()
+    ? await supabase.from("projects").select("id, name").eq("id", block.project_id).maybeSingle()
     : { data: null };
 
   const { data: members } = await supabase
@@ -90,6 +90,7 @@ export default async function WorkspaceBlockPage({ params }: BlockPageRouteProps
       workspaceSlug={workspaceSlug}
       blockId={block.id}
       blockType={block.type}
+      projectId={project?.id ?? undefined}
       projectName={project?.name}
       initialTitle={block.properties?.title?.trim() || "Bez tytułu"}
       initialContent={Array.isArray(block.content) ? block.content : []}

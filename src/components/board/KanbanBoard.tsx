@@ -13,12 +13,14 @@ import {
 } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
 import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { KanbanCard } from "@/components/board/KanbanCard";
 import { KanbanColumn, type KanbanTaskCard } from "@/components/board/KanbanColumn";
 import { TASK_STATUSES, type TaskStatus } from "@/lib/db/types";
 import { useBoardFiltersStore, type BoardSortOption } from "@/lib/stores/board-filters-store";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { boardColumnsQueryKey } from "@/lib/react-query/query-keys";
 
 interface KanbanBoardProps {
   workspaceSlug: string;
@@ -176,7 +178,28 @@ function moveTask(
 }
 
 export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: KanbanBoardProps) {
-  const [boardColumns, setBoardColumns] = useState(columns);
+  const queryClient = useQueryClient();
+  const columnsQueryKey = boardColumnsQueryKey(workspaceSlug, projectId);
+  const [boardColumns, setBoardColumns] = useState(() => {
+    const cachedColumns = queryClient.getQueryData<Record<TaskStatus, KanbanTaskCard[]>>(columnsQueryKey);
+
+    if (cachedColumns) {
+      return cachedColumns;
+    }
+
+    queryClient.setQueryData(columnsQueryKey, columns);
+    return columns;
+  });
+
+  const updateBoardColumns = (
+    updater: Record<TaskStatus, KanbanTaskCard[]> | ((previous: Record<TaskStatus, KanbanTaskCard[]>) => Record<TaskStatus, KanbanTaskCard[]>)
+  ) => {
+    setBoardColumns((previous) => {
+      const next = typeof updater === "function" ? updater(previous) : updater;
+      queryClient.setQueryData(columnsQueryKey, next);
+      return next;
+    });
+  };
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [creatingByStatus, setCreatingByStatus] = useState<Record<TaskStatus, boolean>>({
     todo: false,
@@ -327,7 +350,7 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
     const optimisticId = `optimistic-${Date.now()}`;
 
     setCreatingByStatus((previous) => ({ ...previous, [status]: true }));
-    setBoardColumns((previous) => upsertCard(previous, { id: optimisticId, title, status, position: 0, isOptimistic: true }));
+    updateBoardColumns((previous) => upsertCard(previous, { id: optimisticId, title, status, position: 0, isOptimistic: true }));
 
     const response = await fetch("/api/blocks", {
       method: "POST",
@@ -338,7 +361,7 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
     const result = (await response.json()) as ApiResponse<BlockApiData>;
 
     if (!response.ok || !result.data) {
-      setBoardColumns((previous) => ({
+      updateBoardColumns((previous) => ({
         todo: previous.todo.filter((card) => card.id !== optimisticId),
         in_progress: previous.in_progress.filter((card) => card.id !== optimisticId),
         done: previous.done.filter((card) => card.id !== optimisticId),
@@ -351,7 +374,7 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
     const createdStatus = createdTask.properties.status;
     const normalizedStatus: TaskStatus = createdStatus && isTaskStatus(createdStatus) ? createdStatus : status;
 
-    setBoardColumns((previous) =>
+    updateBoardColumns((previous) =>
       upsertCard(
         previous,
         {
@@ -387,7 +410,7 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
     const updatedStatus = updatedTask.properties.status;
     const nextStatus: TaskStatus = updatedStatus && isTaskStatus(updatedStatus) ? updatedStatus : "todo";
 
-    setBoardColumns((previous) => upsertCard(previous, {
+    updateBoardColumns((previous) => upsertCard(previous, {
       id: updatedTask.id,
       title: updatedTask.properties.title?.trim() || "Bez tytułu",
       status: nextStatus,
@@ -401,7 +424,7 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
   const handleDeleteTask = async (taskId: string) => {
     const snapshot = boardColumns;
 
-    setBoardColumns((previous) => ({
+    updateBoardColumns((previous) => ({
       todo: previous.todo.filter((card) => card.id !== taskId),
       in_progress: previous.in_progress.filter((card) => card.id !== taskId),
       done: previous.done.filter((card) => card.id !== taskId),
@@ -414,7 +437,7 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
     const result = (await response.json()) as ApiResponse<{ id: string }>;
 
     if (!response.ok || !result.data) {
-      setBoardColumns(snapshot);
+      updateBoardColumns(snapshot);
     }
   };
 
@@ -451,7 +474,7 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
       return;
     }
 
-    setBoardColumns(nextColumns);
+    updateBoardColumns(nextColumns);
 
     const response = await fetch(`/api/blocks/${activeId}`, {
       method: "PATCH",
@@ -462,7 +485,7 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
     const result = (await response.json()) as ApiResponse<BlockApiData>;
 
     if (!response.ok || !result.data) {
-      setBoardColumns(snapshot);
+      updateBoardColumns(snapshot);
     }
   };
 
