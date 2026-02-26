@@ -11,6 +11,8 @@ interface KanbanCardProps {
   card: KanbanTaskCard;
   onUpdateTask: (taskId: string, payload: { title?: string; status?: TaskStatus }) => Promise<void>;
   onDeleteTask: (taskId: string) => Promise<void>;
+  hideActions?: boolean;
+  disableLink?: boolean;
 }
 
 const PRIORITY_LABELS: Record<NonNullable<KanbanTaskCard["priority"]>, string> = {
@@ -50,7 +52,7 @@ function formatAssignee(assignee?: string): string {
   return `${assignee.slice(0, 8)}…`;
 }
 
-export function KanbanCard({ workspaceSlug, card, onUpdateTask, onDeleteTask }: KanbanCardProps) {
+export function KanbanCard({ workspaceSlug, card, onUpdateTask, onDeleteTask, hideActions = false, disableLink = false }: KanbanCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(card.title);
   const [status, setStatus] = useState<TaskStatus>(card.status);
@@ -75,33 +77,37 @@ export function KanbanCard({ workspaceSlug, card, onUpdateTask, onDeleteTask }: 
     setIsSubmitting(false);
   };
 
+  const content = (
+    <>
+      <p className="line-clamp-2 text-sm font-medium text-content-primary">{card.title}</p>
+
+      <div className="mt-3 space-y-1.5 text-xs text-content-muted">
+        <div className="flex items-center gap-1.5">
+          <Flag className="h-3.5 w-3.5" aria-hidden="true" />
+          <span>{card.priority ? PRIORITY_LABELS[card.priority] : "Brak priorytetu"}</span>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
+          <span>{formatDueDate(card.dueDate)}</span>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <User className="h-3.5 w-3.5" aria-hidden="true" />
+          <span>{formatAssignee(card.assignee)}</span>
+        </div>
+      </div>
+    </>
+  );
+
   return (
     <div
       className="rounded-lg border border-border-subtle bg-bg-surface p-3 transition-all duration-150 hover:-translate-y-px hover:border-border-default hover:bg-bg-elevated hover:shadow-md"
       data-optimistic={card.isOptimistic ? "true" : "false"}
     >
-      <Link href={`/${workspaceSlug}/block/${card.id}`} className="block">
-        <p className="line-clamp-2 text-sm font-medium text-content-primary">{card.title}</p>
+      {disableLink ? content : <Link href={`/${workspaceSlug}/block/${card.id}`} className="block">{content}</Link>}
 
-        <div className="mt-3 space-y-1.5 text-xs text-content-muted">
-          <div className="flex items-center gap-1.5">
-            <Flag className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>{card.priority ? PRIORITY_LABELS[card.priority] : "Brak priorytetu"}</span>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>{formatDueDate(card.dueDate)}</span>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <User className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>{formatAssignee(card.assignee)}</span>
-          </div>
-        </div>
-      </Link>
-
-      {!card.isOptimistic ? (
+      {!card.isOptimistic && !hideActions ? (
         <>
           {isEditing ? (
             <div className="mt-2 space-y-2 rounded-md border border-border-subtle bg-bg-base p-2">

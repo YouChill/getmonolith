@@ -18,6 +18,7 @@ interface TaskBlockProperties {
 
 interface TaskBlock {
   id: string;
+  position: number;
   properties: TaskBlockProperties;
 }
 
@@ -75,7 +76,7 @@ export default async function ProjectBoardPage({ params }: ProjectBoardPageProps
 
   const { data: tasks } = await supabase
     .from("blocks")
-    .select("id, properties")
+    .select("id, properties, position")
     .eq("workspace_id", workspace.id)
     .eq("project_id", project.id)
     .eq("type", "task")
@@ -94,6 +95,7 @@ export default async function ProjectBoardPage({ params }: ProjectBoardPageProps
       id: task.id,
       title: task.properties?.title?.trim() || "Bez tytułu",
       status,
+      position: task.position,
       priority: task.properties?.priority,
       dueDate: task.properties?.due_date,
       assignee: task.properties?.assigned_to,

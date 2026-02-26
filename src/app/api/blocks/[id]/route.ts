@@ -5,6 +5,7 @@ import { createServerClient } from "@/lib/supabase/server";
 interface UpdateBlockPayload {
   title?: string;
   status?: TaskStatus;
+  position?: number;
 }
 
 interface TaskProperties {
@@ -84,7 +85,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     return NextResponse.json({ data: null, error: "Nieprawidłowy status zadania." }, { status: 400 });
   }
 
-  if (typeof body.title !== "string" && typeof body.status !== "string") {
+  if (typeof body.position !== "undefined" && (!Number.isFinite(body.position) || body.position <= 0)) {
+    return NextResponse.json({ data: null, error: "Nieprawidłowa pozycja zadania." }, { status: 400 });
+  }
+
+  if (typeof body.title !== "string" && typeof body.status !== "string" && typeof body.position !== "number") {
     return NextResponse.json({ data: null, error: "Brak danych do aktualizacji." }, { status: 400 });
   }
 
@@ -96,9 +101,13 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
   const { data, error } = await access.supabase
     .from("blocks")
-    .update({ properties: nextProperties, updated_at: new Date().toISOString() })
+    .update({
+      properties: nextProperties,
+      ...(typeof body.position === "number" ? { position: body.position } : {}),
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", id)
-    .select("id, properties")
+    .select("id, properties, position")
     .single();
 
   if (error || !data) {

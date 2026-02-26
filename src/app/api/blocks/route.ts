@@ -84,7 +84,7 @@ export async function POST(request: Request) {
         status: body.status,
       },
     })
-    .select("id, properties")
+    .select("id, properties, position")
     .single();
 
   if (error || !data) {
