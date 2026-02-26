@@ -4,6 +4,7 @@ import { type ComponentType, type FormEvent, useMemo, useState, useTransition } 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  CalendarDays,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -340,6 +341,13 @@ export function Sidebar({ currentWorkspaceSlug, workspaceId, workspaces, project
           label="Notatki"
           icon={NotebookPen}
           isActive={pathname.includes("/notes")}
+          collapsed={isCollapsed}
+        />
+        <SidebarLink
+          href={`/${currentWorkspaceSlug}/calendar`}
+          label="Kalendarz"
+          icon={CalendarDays}
+          isActive={pathname.includes("/calendar")}
           collapsed={isCollapsed}
         />
         <SidebarLink
