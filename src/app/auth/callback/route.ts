@@ -45,6 +45,19 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        await supabase
+          .from("workspace_members")
+          .update({ accepted_at: new Date().toISOString() })
+          .eq("user_id", user.id)
+          .is("accepted_at", null)
+          .neq("role", "owner");
+      }
+
       return NextResponse.redirect(`${origin}${next}`);
     }
   }
