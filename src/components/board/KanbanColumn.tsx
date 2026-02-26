@@ -22,6 +22,7 @@ export interface KanbanTaskCard {
 interface UpdateTaskPayload {
   title?: string;
   status?: TaskStatus;
+  due_date?: string | null;
 }
 
 interface KanbanColumnProps {
