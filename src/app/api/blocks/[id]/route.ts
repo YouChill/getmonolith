@@ -9,6 +9,7 @@ interface UpdateBlockPayload {
   priority?: "low" | "medium" | "high" | "urgent" | null;
   assigned_to?: string | null;
   position?: number;
+  parent_block_id?: string | null;
   content?: unknown;
 }
 
@@ -96,7 +97,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   }
 
   if (typeof body.position !== "undefined" && (!Number.isFinite(body.position) || body.position <= 0)) {
-    return NextResponse.json({ data: null, error: "Nieprawidłowa pozycja zadania." }, { status: 400 });
+    return NextResponse.json({ data: null, error: "Nieprawidłowa pozycja bloku." }, { status: 400 });
   }
 
   if (access.data.type === "task") {
@@ -116,6 +117,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     typeof body.due_date !== "undefined" ||
     typeof body.priority !== "undefined" ||
     typeof body.assigned_to !== "undefined" ||
+    typeof body.parent_block_id !== "undefined" ||
     typeof body.content !== "undefined";
 
   if (!hasUpdatableFields) {
@@ -162,11 +164,12 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     .update({
       properties: nextProperties,
       ...(typeof body.position === "number" ? { position: body.position } : {}),
+      ...(typeof body.parent_block_id !== "undefined" ? { parent_block_id: body.parent_block_id } : {}),
       ...(typeof body.content !== "undefined" ? { content: body.content } : {}),
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)
-    .select("id, type, properties, content, position")
+    .select("id, type, properties, content, position, parent_block_id")
     .single();
 
   if (error || !data) {
@@ -197,7 +200,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
 
   const { data, error } = await access.supabase
     .from("blocks")
-    .select("id, type, workspace_id, project_id, properties, content, position")
+    .select("id, type, workspace_id, project_id, properties, content, position, parent_block_id")
     .eq("id", id)
     .single<AccessibleBlock>();
 

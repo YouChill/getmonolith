@@ -25,6 +25,15 @@ interface WorkspaceMembership {
   } | null;
 }
 
+interface PageItem {
+  id: string;
+  parent_block_id: string | null;
+  position: number;
+  properties: {
+    title?: string;
+  } | null;
+}
+
 async function DashboardShell({ children, workspaceSlug }: DashboardShellProps) {
   const supabase = await createServerClient();
 
@@ -67,6 +76,14 @@ async function DashboardShell({ children, workspaceSlug }: DashboardShellProps) 
     .eq("workspace_id", currentWorkspace.id)
     .order("created_at", { ascending: true });
 
+  const { data: pages } = await supabase
+    .from("blocks")
+    .select("id, parent_block_id, position, properties")
+    .eq("workspace_id", currentWorkspace.id)
+    .eq("type", "page")
+    .order("position", { ascending: true })
+    .returns<PageItem[]>();
+
   return (
     <ReactQueryProvider>
       <Sidebar
@@ -74,6 +91,7 @@ async function DashboardShell({ children, workspaceSlug }: DashboardShellProps) 
         workspaceId={currentWorkspace.id}
         workspaces={workspaces}
         projects={projects ?? []}
+        pages={pages ?? []}
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <Navbar workspaceName={currentWorkspace.name} userEmail={user.email ?? user.id} />
