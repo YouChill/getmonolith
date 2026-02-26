@@ -17,7 +17,8 @@ BEGIN;
 INSERT INTO auth.users (id, email, raw_user_meta_data)
 VALUES
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'alice@test.local', '{}'),
-  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'bob@test.local',   '{}');
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'bob@test.local',   '{}'),
+  ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'charlie@test.local', '{}');
 
 -- --------------------------------------------------------
 -- 1. Create workspaces — Alice owns ws_alice, Bob owns ws_bob
@@ -37,7 +38,9 @@ VALUES
   ('11111111-1111-1111-1111-111111111111',
    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'owner', now()),
   ('22222222-2222-2222-2222-222222222222',
-   'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'owner', now());
+   'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'owner', now()),
+  ('11111111-1111-1111-1111-111111111111',
+   'cccccccc-cccc-cccc-cccc-cccccccccccc', 'member', now());
 
 -- --------------------------------------------------------
 -- 3. Create projects, blocks, tags, and block_tags in each WS
@@ -183,6 +186,51 @@ BEGIN
   DELETE FROM workspaces WHERE id = '11111111-1111-1111-1111-111111111111';
   GET DIAGNOSTICS cnt = ROW_COUNT;
   ASSERT cnt = 0, 'Bob must NOT be able to delete Alice workspace';
+END $$;
+
+
+
+-- Charlie (member) cannot manage other members in Alice workspace
+SET LOCAL request.jwt.claims = '{"sub":"cccccccc-cccc-cccc-cccc-cccccccccccc"}';
+
+DO $$
+BEGIN
+  UPDATE workspace_members
+  SET role = 'admin'
+  WHERE workspace_id = '11111111-1111-1111-1111-111111111111'
+    AND user_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+
+  RAISE EXCEPTION 'Member should not be able to change roles';
+EXCEPTION
+  WHEN insufficient_privilege THEN
+    NULL;
+END $$;
+
+DO $$
+DECLARE
+  cnt int;
+BEGIN
+  DELETE FROM workspace_members
+  WHERE workspace_id = '11111111-1111-1111-1111-111111111111'
+    AND user_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+
+  GET DIAGNOSTICS cnt = ROW_COUNT;
+  ASSERT cnt = 0, 'Member must not be able to remove another member';
+END $$;
+
+-- Alice (owner) cannot remove own owner membership via RLS
+SET LOCAL request.jwt.claims = '{"sub":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"}';
+
+DO $$
+DECLARE
+  cnt int;
+BEGIN
+  DELETE FROM workspace_members
+  WHERE workspace_id = '11111111-1111-1111-1111-111111111111'
+    AND user_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+
+  GET DIAGNOSTICS cnt = ROW_COUNT;
+  ASSERT cnt = 0, 'Owner must not be able to remove self owner membership';
 END $$;
 
 -- --------------------------------------------------------
