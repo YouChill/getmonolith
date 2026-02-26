@@ -37,11 +37,17 @@ function isTaskStatus(value: string): value is TaskStatus {
   return TASK_STATUSES.includes(value as TaskStatus);
 }
 
-function upsertCard(columns: Record<TaskStatus, KanbanTaskCard[]>, nextCard: KanbanTaskCard): Record<TaskStatus, KanbanTaskCard[]> {
+function upsertCard(
+  columns: Record<TaskStatus, KanbanTaskCard[]>,
+  nextCard: KanbanTaskCard,
+  options?: { removeIds?: string[] }
+): Record<TaskStatus, KanbanTaskCard[]> {
+  const idsToRemove = new Set([nextCard.id, ...(options?.removeIds ?? [])]);
+
   const nextColumns: Record<TaskStatus, KanbanTaskCard[]> = {
-    todo: columns.todo.filter((card) => card.id !== nextCard.id),
-    in_progress: columns.in_progress.filter((card) => card.id !== nextCard.id),
-    done: columns.done.filter((card) => card.id !== nextCard.id),
+    todo: columns.todo.filter((card) => !idsToRemove.has(card.id)),
+    in_progress: columns.in_progress.filter((card) => !idsToRemove.has(card.id)),
+    done: columns.done.filter((card) => !idsToRemove.has(card.id)),
   };
 
   nextColumns[nextCard.status] = [nextCard, ...nextColumns[nextCard.status]];
@@ -85,14 +91,20 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
     const createdStatus = createdTask.properties.status;
     const normalizedStatus: TaskStatus = createdStatus && isTaskStatus(createdStatus) ? createdStatus : status;
 
-    setBoardColumns((previous) => upsertCard(previous, {
-      id: createdTask.id,
-      title: createdTask.properties.title?.trim() || title,
-      status: normalizedStatus,
-      priority: createdTask.properties.priority,
-      dueDate: createdTask.properties.due_date,
-      assignee: createdTask.properties.assigned_to,
-    }));
+    setBoardColumns((previous) =>
+      upsertCard(
+        previous,
+        {
+          id: createdTask.id,
+          title: createdTask.properties.title?.trim() || title,
+          status: normalizedStatus,
+          priority: createdTask.properties.priority,
+          dueDate: createdTask.properties.due_date,
+          assignee: createdTask.properties.assigned_to,
+        },
+        { removeIds: [optimisticId] }
+      )
+    );
 
     setCreatingByStatus((previous) => ({ ...previous, [status]: false }));
   };
