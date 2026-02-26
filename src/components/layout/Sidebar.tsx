@@ -19,6 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useSidebarStore } from "@/lib/stores/sidebar-store";
 import { WorkspaceSwitcher } from "@/components/layout/WorkspaceSwitcher";
+import { NotesTreeSidebar } from "@/components/notes/NotesTreeSidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,6 +43,7 @@ interface SidebarProps {
   workspaceId: string;
   workspaces: WorkspaceItem[];
   projects: ProjectItem[];
+  pages: Array<{ id: string; parent_block_id: string | null; position: number; properties: { title?: string } | null }>;
 }
 
 interface SidebarLinkProps {
@@ -191,7 +193,7 @@ export function SidebarSkeleton() {
   );
 }
 
-export function Sidebar({ currentWorkspaceSlug, workspaceId, workspaces, projects }: SidebarProps) {
+export function Sidebar({ currentWorkspaceSlug, workspaceId, workspaces, projects, pages }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { isCollapsed, toggle } = useSidebarStore();
@@ -360,6 +362,12 @@ export function Sidebar({ currentWorkspaceSlug, workspaceId, workspaces, project
       </nav>
 
       <div className="mt-6 flex-1 overflow-y-auto">
+        <NotesTreeSidebar
+          workspaceId={workspaceId}
+          workspaceSlug={currentWorkspaceSlug}
+          isCollapsed={isCollapsed}
+          pages={pages}
+        />
         {!isCollapsed && (
           <div className="mb-2 flex items-center justify-between px-1">
             <p className="text-xs uppercase tracking-wider text-content-muted">Projekty</p>
