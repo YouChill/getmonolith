@@ -1,3 +1,6 @@
+import { CSS } from "@dnd-kit/utilities";
+import { useDroppable } from "@dnd-kit/core";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useState } from "react";
 import { Check, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,6 +12,7 @@ export interface KanbanTaskCard {
   id: string;
   title: string;
   status: TaskStatus;
+  position: number;
   priority?: "low" | "medium" | "high" | "urgent";
   dueDate?: string;
   assignee?: string;
@@ -31,6 +35,44 @@ interface KanbanColumnProps {
   onDeleteTask: (taskId: string) => Promise<void>;
 }
 
+function SortableTaskCard({
+  card,
+  workspaceSlug,
+  onUpdateTask,
+  onDeleteTask,
+}: {
+  card: KanbanTaskCard;
+  workspaceSlug: string;
+  onUpdateTask: (taskId: string, payload: UpdateTaskPayload) => Promise<void>;
+  onDeleteTask: (taskId: string) => Promise<void>;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: card.id,
+    data: { type: "task", status: card.status },
+    disabled: card.isOptimistic,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+      }}
+      className={isDragging ? "opacity-40" : undefined}
+      {...attributes}
+      {...listeners}
+    >
+      <KanbanCard
+        card={card}
+        workspaceSlug={workspaceSlug}
+        onUpdateTask={onUpdateTask}
+        onDeleteTask={onDeleteTask}
+      />
+    </div>
+  );
+}
+
 export function KanbanColumn({
   title,
   status,
@@ -43,6 +85,11 @@ export function KanbanColumn({
 }: KanbanColumnProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [newTitle, setNewTitle] = useState("");
+
+  const { setNodeRef, isOver } = useDroppable({
+    id: `column:${status}`,
+    data: { type: "column", status },
+  });
 
   const handleCreateTask = async () => {
     const trimmedTitle = newTitle.trim();
@@ -63,22 +110,27 @@ export function KanbanColumn({
         <span className="rounded-full bg-bg-elevated px-2 py-0.5 text-xs text-content-muted">{cards.length}</span>
       </div>
 
-      <div className="flex flex-1 flex-col gap-2">
-        {cards.length === 0 ? (
-          <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-border-subtle bg-bg-surface/60 px-4 text-center">
-            <p className="text-sm text-content-muted">Brak zadań w kolumnie.</p>
-          </div>
-        ) : (
-          cards.map((card) => (
-            <KanbanCard
-              key={card.id}
-              card={card}
-              workspaceSlug={workspaceSlug}
-              onUpdateTask={onUpdateTask}
-              onDeleteTask={onDeleteTask}
-            />
-          ))
-        )}
+      <div
+        ref={setNodeRef}
+        className={`flex flex-1 flex-col gap-2 rounded-lg transition-colors ${isOver ? "bg-bg-surface/80" : ""}`}
+      >
+        <SortableContext items={cards.map((card) => card.id)} strategy={verticalListSortingStrategy}>
+          {cards.length === 0 ? (
+            <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-border-subtle bg-bg-surface/60 px-4 text-center">
+              <p className="text-sm text-content-muted">Brak zadań w kolumnie.</p>
+            </div>
+          ) : (
+            cards.map((card) => (
+              <SortableTaskCard
+                key={card.id}
+                card={card}
+                workspaceSlug={workspaceSlug}
+                onUpdateTask={onUpdateTask}
+                onDeleteTask={onDeleteTask}
+              />
+            ))
+          )}
+        </SortableContext>
       </div>
 
       <div className="mt-3 border-t border-border-subtle pt-3">
