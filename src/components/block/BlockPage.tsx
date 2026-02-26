@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { BlockNoteEditor } from "@/components/editor/BlockNoteEditor";
 import type { BlockNoteContent } from "@/lib/types/blocknote";
@@ -282,7 +283,7 @@ export function BlockPage({
 
           <label className="mb-3 block text-xs text-content-muted">
             Termin
-            <Input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="mt-1" />
+            <DatePicker value={dueDate} onChange={setDueDate} className="mt-1" />
           </label>
 
           <label className="mb-3 block text-xs text-content-muted">

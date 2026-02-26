@@ -3,6 +3,7 @@ import { useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, Flag, Pencil, Trash2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import type { KanbanTaskCard } from "@/components/board/KanbanColumn";
 import type { TaskStatus } from "@/lib/db/types";
@@ -11,7 +12,7 @@ import { blockQueryKey } from "@/lib/react-query/query-keys";
 interface KanbanCardProps {
   workspaceSlug: string;
   card: KanbanTaskCard;
-  onUpdateTask: (taskId: string, payload: { title?: string; status?: TaskStatus }) => Promise<void>;
+  onUpdateTask: (taskId: string, payload: { title?: string; status?: TaskStatus; due_date?: string | null }) => Promise<void>;
   onDeleteTask: (taskId: string) => Promise<void>;
   hideActions?: boolean;
   disableLink?: boolean;
@@ -43,6 +44,24 @@ function formatDueDate(dueDate?: string): string {
   }).format(date);
 }
 
+function isOverdue(dueDate?: string, status?: TaskStatus): boolean {
+  if (!dueDate || status === "done") {
+    return false;
+  }
+
+  const due = new Date(dueDate);
+
+  if (Number.isNaN(due.getTime())) {
+    return false;
+  }
+
+  due.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return due.getTime() < today.getTime();
+}
+
 function formatAssignee(assignee?: string): string {
   if (!assignee) {
     return "Nieprzypisane";
@@ -67,6 +86,7 @@ export function KanbanCard({
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(card.title);
   const [status, setStatus] = useState<TaskStatus>(card.status);
+  const [dueDate, setDueDate] = useState(card.dueDate ?? "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const queryClient = useQueryClient();
 
@@ -95,7 +115,7 @@ export function KanbanCard({
     }
 
     setIsSubmitting(true);
-    await onUpdateTask(card.id, { title: trimmedTitle, status });
+    await onUpdateTask(card.id, { title: trimmedTitle, status, due_date: dueDate || null });
     setIsSubmitting(false);
     setIsEditing(false);
   };
@@ -105,6 +125,15 @@ export function KanbanCard({
     await onDeleteTask(card.id);
     setIsSubmitting(false);
   };
+
+  const handleDueDateChange = async (nextDueDate: string) => {
+    setDueDate(nextDueDate);
+    setIsSubmitting(true);
+    await onUpdateTask(card.id, { due_date: nextDueDate || null });
+    setIsSubmitting(false);
+  };
+
+  const cardIsOverdue = isOverdue(card.dueDate, card.status);
 
   const content = (
     <>
@@ -121,7 +150,7 @@ export function KanbanCard({
 
         <div className="flex items-center gap-1.5">
           <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>{formatDueDate(card.dueDate)}</span>
+          <span className={cardIsOverdue ? "font-medium text-red-400" : undefined}>{formatDueDate(card.dueDate)}</span>
         </div>
 
         <div className="flex items-center gap-1.5">
@@ -153,6 +182,7 @@ export function KanbanCard({
                 <option value="in_progress">In Progress</option>
                 <option value="done">Done</option>
               </select>
+              <DatePicker value={dueDate} onChange={handleDueDateChange} placeholder="Ustaw termin" />
               <div className="flex justify-end gap-2">
                 <Button type="button" size="sm" variant="ghost" onClick={() => setIsEditing(false)} disabled={isSubmitting}>
                   Cancel

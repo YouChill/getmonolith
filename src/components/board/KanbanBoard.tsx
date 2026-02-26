@@ -393,7 +393,33 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
     setCreatingByStatus((previous) => ({ ...previous, [status]: false }));
   };
 
-  const handleUpdateTask = async (taskId: string, payload: { title?: string; status?: TaskStatus }) => {
+  const handleUpdateTask = async (taskId: string, payload: { title?: string; status?: TaskStatus; due_date?: string | null }) => {
+    const snapshot = boardColumns;
+
+    updateBoardColumns((previous) => {
+      const currentStatus = findTaskStatusById(previous, taskId);
+
+      if (!currentStatus) {
+        return previous;
+      }
+
+      const currentCard = previous[currentStatus].find((card) => card.id === taskId);
+
+      if (!currentCard) {
+        return previous;
+      }
+
+      const nextStatus = payload.status ?? currentCard.status;
+
+      return upsertCard(previous, {
+        ...currentCard,
+        id: taskId,
+        title: typeof payload.title === "string" ? payload.title : currentCard.title,
+        status: nextStatus,
+        dueDate: typeof payload.due_date !== "undefined" ? payload.due_date ?? undefined : currentCard.dueDate,
+      });
+    });
+
     const response = await fetch(`/api/blocks/${taskId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -403,6 +429,7 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
     const result = (await response.json()) as ApiResponse<BlockApiData>;
 
     if (!response.ok || !result.data) {
+      updateBoardColumns(snapshot);
       return;
     }
 
