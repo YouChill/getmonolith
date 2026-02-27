@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase/server";
+import { and, eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { workspaces, workspaceMembers } from "@/lib/db/schema";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getAuthUser, getMembershipWithRole } from "@/lib/db/queries";
 
 type InvitePayload = {
   email?: string;
@@ -9,17 +12,13 @@ type InvitePayload = {
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id: workspaceId } = await context.params;
-  const supabase = await createServerClient();
+  const auth = await getAuthUser();
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
+  if (!auth.data) {
     return NextResponse.json({ data: null, error: "Unauthorized" }, { status: 401 });
   }
 
+  const user = auth.data;
   const body = (await request.json()) as InvitePayload;
   const email = body.email?.trim().toLowerCase();
   const role = body.role;
@@ -27,38 +26,33 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   if (!email || !role || !["member", "admin"].includes(role)) {
     return NextResponse.json(
       { data: null, error: "Pola email i rola (member/admin) są wymagane." },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
-  const { data: ownerMembership, error: ownerError } = await supabase
-    .from("workspace_members")
-    .select("role")
-    .eq("workspace_id", workspaceId)
-    .eq("user_id", user.id)
-    .single();
+  const ownerMembership = await getMembershipWithRole(workspaceId, user.id);
 
-  if (ownerError || ownerMembership?.role !== "owner") {
+  if (!ownerMembership || ownerMembership.role !== "owner") {
     return NextResponse.json(
       { data: null, error: "Tylko owner może zapraszać członków do workspace." },
-      { status: 403 }
+      { status: 403 },
     );
   }
 
-  const { data: workspace, error: workspaceError } = await supabase
-    .from("workspaces")
-    .select("slug")
-    .eq("id", workspaceId)
-    .single();
+  const [workspace] = await db
+    .select({ slug: workspaces.slug })
+    .from(workspaces)
+    .where(eq(workspaces.id, workspaceId))
+    .limit(1);
 
-  if (workspaceError || !workspace) {
+  if (!workspace) {
     return NextResponse.json({ data: null, error: "Workspace nie istnieje." }, { status: 404 });
   }
 
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return NextResponse.json(
       { data: null, error: "Brak SUPABASE_SERVICE_ROLE_KEY w środowisku." },
-      { status: 500 }
+      { status: 500 },
     );
   }
 
@@ -70,29 +64,29 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   if (inviteError || !inviteData.user) {
     return NextResponse.json(
       { data: null, error: inviteError?.message ?? "Nie udało się wysłać zaproszenia." },
-      { status: 500 }
+      { status: 500 },
     );
   }
 
-  const { error: membershipError } = await admin
-    .from("workspace_members")
-    .upsert(
-      {
-        workspace_id: workspaceId,
-        user_id: inviteData.user.id,
+  const now = new Date();
+
+  await db
+    .insert(workspaceMembers)
+    .values({
+      workspaceId,
+      userId: inviteData.user.id,
+      role,
+      invitedAt: now,
+      acceptedAt: null,
+    })
+    .onConflictDoUpdate({
+      target: [workspaceMembers.workspaceId, workspaceMembers.userId],
+      set: {
         role,
-        invited_at: new Date().toISOString(),
-        accepted_at: null,
+        invitedAt: now,
+        acceptedAt: null,
       },
-      { onConflict: "workspace_id,user_id" }
-    );
-
-  if (membershipError) {
-    return NextResponse.json(
-      { data: null, error: "Zaproszenie wysłane, ale nie udało się zapisać membership." },
-      { status: 500 }
-    );
-  }
+    });
 
   return NextResponse.json({ data: { userId: inviteData.user.id, email, role }, error: null }, { status: 201 });
 }
