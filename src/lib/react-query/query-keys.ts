@@ -8,3 +8,9 @@ export const calendarEventsQueryKey = (workspaceSlug: string, activeMonth: strin
 
 export const workspaceMembersQueryKey = (workspaceId: string) =>
   ["workspace-members", workspaceId] as const;
+
+export const sidebarProjectsQueryKey = (workspaceId: string) =>
+  ["sidebar-projects", workspaceId] as const;
+
+export const notesTreeQueryKey = (workspaceId: string) =>
+  ["notes-tree", workspaceId] as const;

@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { type SidebarPageItem, PageTreeItem } from "@/components/notes/PageTreeItem";
 import { Button } from "@/components/ui/button";
+import { notesTreeQueryKey } from "@/lib/react-query/query-keys";
 
 interface NotesTreeSidebarProps {
   workspaceId: string;
@@ -13,10 +15,32 @@ interface NotesTreeSidebarProps {
   pages: Array<{ id: string; parent_block_id: string | null; position: number; properties: { title?: string; icon?: string } | null }>;
 }
 
+interface CreatePageResponse {
+  data: {
+    id: string;
+    parent_block_id: string | null;
+    position: number;
+    properties?: { title?: string; icon?: string };
+  } | null;
+  error: string | null;
+}
+
+interface MovePageResponse {
+  data: {
+    id: string;
+    type: string;
+    properties: Record<string, unknown>;
+    content: unknown;
+    position: number;
+    parentBlockId: string | null;
+  } | null;
+  error: string | null;
+}
+
 export function NotesTreeSidebar({ workspaceId, workspaceSlug, isCollapsed, pages }: NotesTreeSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const queryClient = useQueryClient();
   const [draggedPageId, setDraggedPageId] = useState<string | null>(null);
   const [expandedPageIds, setExpandedPageIds] = useState<Set<string>>(new Set());
   const [pageItems, setPageItems] = useState<SidebarPageItem[]>(
@@ -87,65 +111,100 @@ export function NotesTreeSidebar({ workspaceId, workspaceSlug, isCollapsed, page
     return false;
   }
 
-  function persistPageMove(pageId: string, parentBlockId: string | null, position: number) {
-    startTransition(async () => {
-      const response = await fetch(`/api/blocks/${pageId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ parent_block_id: parentBlockId, position }),
-      });
-
-      if (!response.ok) router.refresh();
-    });
-  }
-
-  function handleCreatePage(parentBlockId: string | null = null) {
-    const tempId = `temp-page-${crypto.randomUUID()}`;
-    const maxPosition = pageItems
-      .filter((page) => page.parentBlockId === parentBlockId)
-      .reduce((max, page) => Math.max(max, page.position), 0);
-
-    setPageItems((current) => [...current, { id: tempId, title: "Nowa strona", icon: "📝", parentBlockId, position: maxPosition + 1 }]);
-    if (parentBlockId) setExpandedPageIds((current) => new Set(current).add(parentBlockId));
-
-    startTransition(async () => {
+  // ── Create page mutation ──────────────────────────────────────────────
+  const createPageMutation = useMutation({
+    mutationFn: async (vars: { parentBlockId: string | null; tempId: string }) => {
       const response = await fetch("/api/blocks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workspaceId, type: "page", title: "Nowa strona", parentBlockId }),
+        body: JSON.stringify({ workspaceId, type: "page", title: "Nowa strona", parentBlockId: vars.parentBlockId }),
       });
 
-      if (!response.ok) {
-        setPageItems((current) => current.filter((page) => page.id !== tempId));
-        return;
+      const payload = (await response.json()) as CreatePageResponse;
+
+      if (!response.ok || !payload.data) {
+        throw new Error(payload.error ?? "Nie udało się utworzyć strony.");
       }
 
-      const payload = (await response.json()) as {
-        data?: { id: string; parent_block_id: string | null; position: number; properties?: { title?: string; icon?: string } };
-      };
+      return payload.data;
+    },
+    onMutate: async (vars) => {
+      const maxPosition = pageItems
+        .filter((page) => page.parentBlockId === vars.parentBlockId)
+        .reduce((max, page) => Math.max(max, page.position), 0);
 
-      if (!payload.data) {
-        setPageItems((current) => current.filter((page) => page.id !== tempId));
-        return;
+      const previousPages = pageItems;
+      setPageItems((current) => [...current, { id: vars.tempId, title: "Nowa strona", icon: "📝", parentBlockId: vars.parentBlockId, position: maxPosition + 1 }]);
+      if (vars.parentBlockId) setExpandedPageIds((current) => new Set(current).add(vars.parentBlockId!));
+
+      return { previousPages, tempId: vars.tempId };
+    },
+    onSuccess: (data, _vars, ctx) => {
+      if (ctx) {
+        setPageItems((current) =>
+          current.map((page) =>
+            page.id === ctx.tempId
+              ? {
+                  id: data.id,
+                  parentBlockId: data.parent_block_id,
+                  position: data.position,
+                  title: data.properties?.title?.trim() || "Nowa strona",
+                  icon: data.properties?.icon?.trim() || "📝",
+                }
+              : page
+          )
+        );
       }
 
-      setPageItems((current) =>
-        current.map((page) =>
-          page.id === tempId
-            ? {
-                id: payload.data!.id,
-                parentBlockId: payload.data!.parent_block_id,
-                position: payload.data!.position,
-                title: payload.data!.properties?.title?.trim() || "Nowa strona",
-                icon: payload.data!.properties?.icon?.trim() || "📝",
-              }
-            : page
-        )
-      );
-
-      router.push(`/${workspaceSlug}/block/${payload.data.id}`);
+      router.push(`/${workspaceSlug}/block/${data.id}`);
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx) {
+        setPageItems(ctx.previousPages);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: notesTreeQueryKey(workspaceId) });
       router.refresh();
-    });
+    },
+  });
+
+  // ── Move page mutation ────────────────────────────────────────────────
+  const movePageMutation = useMutation({
+    mutationFn: async (vars: { pageId: string; parentBlockId: string | null; position: number }) => {
+      const response = await fetch(`/api/blocks/${vars.pageId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ parent_block_id: vars.parentBlockId, position: vars.position }),
+      });
+
+      const payload = (await response.json()) as MovePageResponse;
+
+      if (!response.ok || !payload.data) {
+        throw new Error(payload.error ?? "Nie udało się przenieść strony.");
+      }
+
+      return payload.data;
+    },
+    onMutate: async () => {
+      // Optimistic update already applied before mutate is called (in handleDropIntoPage/handleDropBetween)
+      const previousPages = pageItems;
+      return { previousPages };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx) {
+        setPageItems(ctx.previousPages);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: notesTreeQueryKey(workspaceId) });
+      router.refresh();
+    },
+  });
+
+  function handleCreatePage(parentBlockId: string | null = null) {
+    const tempId = `temp-page-${crypto.randomUUID()}`;
+    createPageMutation.mutate({ parentBlockId, tempId });
   }
 
   function handleDropIntoPage(targetPageId: string) {
@@ -161,7 +220,7 @@ export function NotesTreeSidebar({ workspaceId, workspaceSlug, isCollapsed, page
 
     setPageItems(nextPages);
     setExpandedPageIds((current) => new Set(current).add(targetPageId));
-    persistPageMove(movedPage.id, movedPage.parentBlockId, movedPage.position);
+    movePageMutation.mutate({ pageId: movedPage.id, parentBlockId: movedPage.parentBlockId, position: movedPage.position });
     setDraggedPageId(null);
   }
 
@@ -177,7 +236,7 @@ export function NotesTreeSidebar({ workspaceId, workspaceSlug, isCollapsed, page
     if (!movedPage) return;
 
     setPageItems(nextPages);
-    persistPageMove(movedPage.id, movedPage.parentBlockId, movedPage.position);
+    movePageMutation.mutate({ pageId: movedPage.id, parentBlockId: movedPage.parentBlockId, position: movedPage.position });
     setDraggedPageId(null);
   }
 
@@ -189,6 +248,8 @@ export function NotesTreeSidebar({ workspaceId, workspaceSlug, isCollapsed, page
       return next;
     });
   }
+
+  const isPending = createPageMutation.isPending || movePageMutation.isPending;
 
   function renderPageTree(parentBlockId: string | null, depth = 0): React.ReactNode {
     const items = pagesByParent.get(parentBlockId) ?? [];
