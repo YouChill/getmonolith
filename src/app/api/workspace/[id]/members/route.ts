@@ -64,6 +64,10 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     }),
   );
 
+  const memberOptions = settled
+    .filter((result): result is PromiseFulfilledResult<{ id: string; label: string; avatarUrl: string | undefined; initials: string }> => result.status === "fulfilled")
+    .map((result) => result.value);
+
   return NextResponse.json({
     data: {
       workspaceId,
