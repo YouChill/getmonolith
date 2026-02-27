@@ -50,12 +50,19 @@ export async function GET(request: NextRequest) {
       } = await supabase.auth.getUser();
 
       if (user) {
-        await supabase
+        const { error: membershipError } = await supabase
           .from("workspace_members")
           .update({ accepted_at: new Date().toISOString() })
           .eq("user_id", user.id)
           .is("accepted_at", null)
           .neq("role", "owner");
+
+        if (membershipError) {
+          console.error(
+            `[auth/callback] Failed to update workspace_members for user ${user.id}:`,
+            membershipError.message
+          );
+        }
       }
 
       return NextResponse.redirect(`${origin}${next}`);
