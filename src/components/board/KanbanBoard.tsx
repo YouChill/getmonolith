@@ -12,8 +12,8 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
-import { useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useCallback, useMemo, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { KanbanCard } from "@/components/board/KanbanCard";
 import { KanbanColumn, type KanbanTaskCard } from "@/components/board/KanbanColumn";
 import { TASK_STATUSES, type TaskStatus } from "@/lib/db/types";
@@ -47,6 +47,30 @@ interface BlockApiData {
   };
 }
 
+type BoardColumns = Record<TaskStatus, KanbanTaskCard[]>;
+
+interface CreateTaskVars {
+  status: TaskStatus;
+  title: string;
+  optimisticId: string;
+}
+
+interface UpdateTaskVars {
+  taskId: string;
+  payload: { title?: string; status?: TaskStatus; due_date?: string | null; assigned_to?: string | null };
+}
+
+interface DeleteTaskVars {
+  taskId: string;
+}
+
+interface ReorderTaskVars {
+  taskId: string;
+  status: TaskStatus;
+  position: number;
+  nextColumns: BoardColumns;
+}
+
 const COLUMN_TITLES: Record<TaskStatus, string> = {
   todo: "Todo",
   in_progress: "In Progress",
@@ -71,13 +95,13 @@ function isTaskStatus(value: string): value is TaskStatus {
 }
 
 function upsertCard(
-  columns: Record<TaskStatus, KanbanTaskCard[]>,
+  columns: BoardColumns,
   nextCard: KanbanTaskCard,
   options?: { removeIds?: string[] }
-): Record<TaskStatus, KanbanTaskCard[]> {
+): BoardColumns {
   const idsToRemove = new Set([nextCard.id, ...(options?.removeIds ?? [])]);
 
-  const nextColumns: Record<TaskStatus, KanbanTaskCard[]> = {
+  const nextColumns: BoardColumns = {
     todo: columns.todo.filter((card) => !idsToRemove.has(card.id)),
     in_progress: columns.in_progress.filter((card) => !idsToRemove.has(card.id)),
     done: columns.done.filter((card) => !idsToRemove.has(card.id)),
@@ -91,7 +115,15 @@ function upsertCard(
   return nextColumns;
 }
 
-function findTaskStatusById(columns: Record<TaskStatus, KanbanTaskCard[]>, id: string): TaskStatus | null {
+function removeCard(columns: BoardColumns, taskId: string): BoardColumns {
+  return {
+    todo: columns.todo.filter((card) => card.id !== taskId),
+    in_progress: columns.in_progress.filter((card) => card.id !== taskId),
+    done: columns.done.filter((card) => card.id !== taskId),
+  };
+}
+
+function findTaskStatusById(columns: BoardColumns, id: string): TaskStatus | null {
   for (const status of TASK_STATUSES) {
     if (columns[status].some((card) => card.id === id)) {
       return status;
@@ -122,10 +154,10 @@ function getInitials(value: string): string {
 }
 
 function moveTask(
-  columns: Record<TaskStatus, KanbanTaskCard[]>,
+  columns: BoardColumns,
   taskId: string,
   overId: string,
-): { nextColumns: Record<TaskStatus, KanbanTaskCard[]>; movedTask: KanbanTaskCard | null } {
+): { nextColumns: BoardColumns; movedTask: KanbanTaskCard | null } {
   const fromStatus = findTaskStatusById(columns, taskId);
 
   if (!fromStatus) {
@@ -194,11 +226,22 @@ function moveTask(
   };
 }
 
+async function apiRequest<T>(url: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(url, options);
+  const result = (await response.json()) as ApiResponse<T>;
+
+  if (!response.ok || !result.data) {
+    throw new Error(result.error ?? "Request failed");
+  }
+
+  return result.data;
+}
+
 export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: KanbanBoardProps) {
   const queryClient = useQueryClient();
   const columnsQueryKey = boardColumnsQueryKey(workspaceSlug, projectId);
   const [boardColumns, setBoardColumns] = useState(() => {
-    const cachedColumns = queryClient.getQueryData<Record<TaskStatus, KanbanTaskCard[]>>(columnsQueryKey);
+    const cachedColumns = queryClient.getQueryData<BoardColumns>(columnsQueryKey);
 
     if (cachedColumns) {
       return cachedColumns;
@@ -208,15 +251,17 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
     return columns;
   });
 
-  const updateBoardColumns = (
-    updater: Record<TaskStatus, KanbanTaskCard[]> | ((previous: Record<TaskStatus, KanbanTaskCard[]>) => Record<TaskStatus, KanbanTaskCard[]>)
-  ) => {
-    setBoardColumns((previous) => {
-      const next = typeof updater === "function" ? updater(previous) : updater;
-      queryClient.setQueryData(columnsQueryKey, next);
-      return next;
-    });
-  };
+  const updateBoardColumns = useCallback(
+    (updater: BoardColumns | ((previous: BoardColumns) => BoardColumns)) => {
+      setBoardColumns((previous) => {
+        const next = typeof updater === "function" ? updater(previous) : updater;
+        queryClient.setQueryData(columnsQueryKey, next);
+        return next;
+      });
+    },
+    [queryClient, columnsQueryKey]
+  );
+
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [creatingByStatus, setCreatingByStatus] = useState<Record<TaskStatus, boolean>>({
     todo: false,
@@ -231,6 +276,171 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 5 } }),
   );
+
+  // ── Create task mutation ──────────────────────────────────────────────
+  const createTaskMutation = useMutation({
+    mutationFn: (vars: CreateTaskVars) =>
+      apiRequest<BlockApiData>("/api/blocks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceId, projectId, type: "task", title: vars.title, status: vars.status }),
+      }),
+    onMutate: async (vars) => {
+      await queryClient.cancelQueries({ queryKey: columnsQueryKey });
+      const previous = queryClient.getQueryData<BoardColumns>(columnsQueryKey);
+
+      setCreatingByStatus((prev) => ({ ...prev, [vars.status]: true }));
+      updateBoardColumns((prev) =>
+        upsertCard(prev, { id: vars.optimisticId, title: vars.title, status: vars.status, position: 0, isOptimistic: true })
+      );
+
+      return { previous, optimisticId: vars.optimisticId, status: vars.status };
+    },
+    onSuccess: (data, vars, ctx) => {
+      const createdStatus = data.properties.status;
+      const normalizedStatus: TaskStatus = createdStatus && isTaskStatus(createdStatus) ? createdStatus : vars.status;
+
+      updateBoardColumns((prev) =>
+        upsertCard(
+          prev,
+          {
+            id: data.id,
+            title: data.properties.title?.trim() || vars.title,
+            status: normalizedStatus,
+            position: typeof data.position === "number" ? data.position : 1,
+            priority: data.properties.priority,
+            dueDate: data.properties.due_date,
+            assignee: data.properties.assigned_to,
+          },
+          { removeIds: [ctx.optimisticId] }
+        )
+      );
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) {
+        updateBoardColumns(ctx.previous);
+      }
+    },
+    onSettled: (_data, _err, vars) => {
+      setCreatingByStatus((prev) => ({ ...prev, [vars.status]: false }));
+      queryClient.invalidateQueries({ queryKey: columnsQueryKey });
+    },
+  });
+
+  // ── Update task mutation ──────────────────────────────────────────────
+  const updateTaskMutation = useMutation({
+    mutationFn: (vars: UpdateTaskVars) =>
+      apiRequest<BlockApiData>(`/api/blocks/${vars.taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(vars.payload),
+      }),
+    onMutate: async (vars) => {
+      await queryClient.cancelQueries({ queryKey: columnsQueryKey });
+      const previous = queryClient.getQueryData<BoardColumns>(columnsQueryKey);
+
+      updateBoardColumns((prev) => {
+        const currentStatus = findTaskStatusById(prev, vars.taskId);
+
+        if (!currentStatus) {
+          return prev;
+        }
+
+        const currentCard = prev[currentStatus].find((card) => card.id === vars.taskId);
+
+        if (!currentCard) {
+          return prev;
+        }
+
+        const nextStatus = vars.payload.status ?? currentCard.status;
+
+        return upsertCard(prev, {
+          ...currentCard,
+          id: vars.taskId,
+          title: typeof vars.payload.title === "string" ? vars.payload.title : currentCard.title,
+          status: nextStatus,
+          dueDate: typeof vars.payload.due_date !== "undefined" ? vars.payload.due_date ?? undefined : currentCard.dueDate,
+          assignee: typeof vars.payload.assigned_to !== "undefined" ? vars.payload.assigned_to ?? undefined : currentCard.assignee,
+        });
+      });
+
+      return { previous };
+    },
+    onSuccess: (data) => {
+      const updatedStatus = data.properties.status;
+      const nextStatus: TaskStatus = updatedStatus && isTaskStatus(updatedStatus) ? updatedStatus : "todo";
+
+      updateBoardColumns((prev) =>
+        upsertCard(prev, {
+          id: data.id,
+          title: data.properties.title?.trim() || "Bez tytułu",
+          status: nextStatus,
+          position: typeof data.position === "number" ? data.position : 1,
+          priority: data.properties.priority,
+          dueDate: data.properties.due_date,
+          assignee: data.properties.assigned_to,
+        })
+      );
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) {
+        updateBoardColumns(ctx.previous);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: columnsQueryKey });
+    },
+  });
+
+  // ── Delete task mutation ──────────────────────────────────────────────
+  const deleteTaskMutation = useMutation({
+    mutationFn: (vars: DeleteTaskVars) =>
+      apiRequest<{ id: string }>(`/api/blocks/${vars.taskId}`, {
+        method: "DELETE",
+      }),
+    onMutate: async (vars) => {
+      await queryClient.cancelQueries({ queryKey: columnsQueryKey });
+      const previous = queryClient.getQueryData<BoardColumns>(columnsQueryKey);
+
+      updateBoardColumns((prev) => removeCard(prev, vars.taskId));
+
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) {
+        updateBoardColumns(ctx.previous);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: columnsQueryKey });
+    },
+  });
+
+  // ── Reorder task mutation (drag & drop) ───────────────────────────────
+  const reorderTaskMutation = useMutation({
+    mutationFn: (vars: ReorderTaskVars) =>
+      apiRequest<BlockApiData>(`/api/blocks/${vars.taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: vars.status, position: vars.position }),
+      }),
+    onMutate: async (vars) => {
+      await queryClient.cancelQueries({ queryKey: columnsQueryKey });
+      const previous = queryClient.getQueryData<BoardColumns>(columnsQueryKey);
+
+      updateBoardColumns(vars.nextColumns);
+
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) {
+        updateBoardColumns(ctx.previous);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: columnsQueryKey });
+    },
+  });
 
   const activeTask = useMemo(() => {
     if (!activeTaskId) {
@@ -303,55 +513,25 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
       });
     };
 
+    const filterCard = (card: KanbanTaskCard) => {
+      if (query && !card.title.toLowerCase().includes(query)) {
+        return false;
+      }
+
+      if (priority !== "all" && card.priority !== priority) {
+        return false;
+      }
+
+      if (assignee === "all") return true;
+      if (assignee === "mine") return card.assignee === workspaceData?.currentUserId;
+      if (assignee === "unassigned") return !card.assignee;
+      return card.assignee === assignee;
+    };
+
     return {
-      todo: sortCards(
-        boardColumns.todo.filter((card) => {
-          if (query && !card.title.toLowerCase().includes(query)) {
-            return false;
-          }
-
-          if (priority !== "all" && card.priority !== priority) {
-            return false;
-          }
-
-          if (assignee === "all") return true;
-          if (assignee === "mine") return card.assignee === workspaceData?.currentUserId;
-          if (assignee === "unassigned") return !card.assignee;
-          return card.assignee === assignee;
-        })
-      ),
-      in_progress: sortCards(
-        boardColumns.in_progress.filter((card) => {
-          if (query && !card.title.toLowerCase().includes(query)) {
-            return false;
-          }
-
-          if (priority !== "all" && card.priority !== priority) {
-            return false;
-          }
-
-          if (assignee === "all") return true;
-          if (assignee === "mine") return card.assignee === workspaceData?.currentUserId;
-          if (assignee === "unassigned") return !card.assignee;
-          return card.assignee === assignee;
-        })
-      ),
-      done: sortCards(
-        boardColumns.done.filter((card) => {
-          if (query && !card.title.toLowerCase().includes(query)) {
-            return false;
-          }
-
-          if (priority !== "all" && card.priority !== priority) {
-            return false;
-          }
-
-          if (assignee === "all") return true;
-          if (assignee === "mine") return card.assignee === workspaceData?.currentUserId;
-          if (assignee === "unassigned") return !card.assignee;
-          return card.assignee === assignee;
-        })
-      ),
+      todo: sortCards(boardColumns.todo.filter(filterCard)),
+      in_progress: sortCards(boardColumns.in_progress.filter(filterCard)),
+      done: sortCards(boardColumns.done.filter(filterCard)),
     };
   }, [assignee, boardColumns, priority, searchQuery, sortBy, workspaceData?.currentUserId]);
 
@@ -359,125 +539,15 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
 
   const handleCreateTask = async (status: TaskStatus, title: string) => {
     const optimisticId = `optimistic-${Date.now()}`;
-
-    setCreatingByStatus((previous) => ({ ...previous, [status]: true }));
-    updateBoardColumns((previous) => upsertCard(previous, { id: optimisticId, title, status, position: 0, isOptimistic: true }));
-
-    const response = await fetch("/api/blocks", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workspaceId, projectId, type: "task", title, status }),
-    });
-
-    const result = (await response.json()) as ApiResponse<BlockApiData>;
-
-    if (!response.ok || !result.data) {
-      updateBoardColumns((previous) => ({
-        todo: previous.todo.filter((card) => card.id !== optimisticId),
-        in_progress: previous.in_progress.filter((card) => card.id !== optimisticId),
-        done: previous.done.filter((card) => card.id !== optimisticId),
-      }));
-      setCreatingByStatus((previous) => ({ ...previous, [status]: false }));
-      return;
-    }
-
-    const createdTask = result.data;
-    const createdStatus = createdTask.properties.status;
-    const normalizedStatus: TaskStatus = createdStatus && isTaskStatus(createdStatus) ? createdStatus : status;
-
-    updateBoardColumns((previous) =>
-      upsertCard(
-        previous,
-        {
-          id: createdTask.id,
-          title: createdTask.properties.title?.trim() || title,
-          status: normalizedStatus,
-          position: typeof createdTask.position === "number" ? createdTask.position : 1,
-          priority: createdTask.properties.priority,
-          dueDate: createdTask.properties.due_date,
-          assignee: createdTask.properties.assigned_to,
-        },
-        { removeIds: [optimisticId] }
-      )
-    );
-
-    setCreatingByStatus((previous) => ({ ...previous, [status]: false }));
+    createTaskMutation.mutate({ status, title, optimisticId });
   };
 
   const handleUpdateTask = async (taskId: string, payload: { title?: string; status?: TaskStatus; due_date?: string | null; assigned_to?: string | null }) => {
-    const snapshot = boardColumns;
-
-    updateBoardColumns((previous) => {
-      const currentStatus = findTaskStatusById(previous, taskId);
-
-      if (!currentStatus) {
-        return previous;
-      }
-
-      const currentCard = previous[currentStatus].find((card) => card.id === taskId);
-
-      if (!currentCard) {
-        return previous;
-      }
-
-      const nextStatus = payload.status ?? currentCard.status;
-
-      return upsertCard(previous, {
-        ...currentCard,
-        id: taskId,
-        title: typeof payload.title === "string" ? payload.title : currentCard.title,
-        status: nextStatus,
-        dueDate: typeof payload.due_date !== "undefined" ? payload.due_date ?? undefined : currentCard.dueDate,
-        assignee: typeof payload.assigned_to !== "undefined" ? payload.assigned_to ?? undefined : currentCard.assignee,
-      });
-    });
-
-    const response = await fetch(`/api/blocks/${taskId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    const result = (await response.json()) as ApiResponse<BlockApiData>;
-
-    if (!response.ok || !result.data) {
-      updateBoardColumns(snapshot);
-      return;
-    }
-
-    const updatedTask = result.data;
-    const updatedStatus = updatedTask.properties.status;
-    const nextStatus: TaskStatus = updatedStatus && isTaskStatus(updatedStatus) ? updatedStatus : "todo";
-
-    updateBoardColumns((previous) => upsertCard(previous, {
-      id: updatedTask.id,
-      title: updatedTask.properties.title?.trim() || "Bez tytułu",
-      status: nextStatus,
-      position: typeof updatedTask.position === "number" ? updatedTask.position : 1,
-      priority: updatedTask.properties.priority,
-      dueDate: updatedTask.properties.due_date,
-      assignee: updatedTask.properties.assigned_to,
-    }));
+    updateTaskMutation.mutate({ taskId, payload });
   };
 
   const handleDeleteTask = async (taskId: string) => {
-    const snapshot = boardColumns;
-
-    updateBoardColumns((previous) => ({
-      todo: previous.todo.filter((card) => card.id !== taskId),
-      in_progress: previous.in_progress.filter((card) => card.id !== taskId),
-      done: previous.done.filter((card) => card.id !== taskId),
-    }));
-
-    const response = await fetch(`/api/blocks/${taskId}`, {
-      method: "DELETE",
-    });
-
-    const result = (await response.json()) as ApiResponse<{ id: string }>;
-
-    if (!response.ok || !result.data) {
-      updateBoardColumns(snapshot);
-    }
+    deleteTaskMutation.mutate({ taskId });
   };
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -488,7 +558,7 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
     setActiveTaskId(String(event.active.id));
   };
 
-  const handleDragEnd = async (event: DragEndEvent) => {
+  const handleDragEnd = (event: DragEndEvent) => {
     setActiveTaskId(null);
 
     if (!isPositionSort) {
@@ -506,26 +576,18 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
       return;
     }
 
-    const snapshot = boardColumns;
     const { nextColumns, movedTask } = moveTask(boardColumns, activeId, overId);
 
     if (!movedTask) {
       return;
     }
 
-    updateBoardColumns(nextColumns);
-
-    const response = await fetch(`/api/blocks/${activeId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: movedTask.status, position: movedTask.position }),
+    reorderTaskMutation.mutate({
+      taskId: activeId,
+      status: movedTask.status,
+      position: movedTask.position,
+      nextColumns,
     });
-
-    const result = (await response.json()) as ApiResponse<BlockApiData>;
-
-    if (!response.ok || !result.data) {
-      updateBoardColumns(snapshot);
-    }
   };
 
   const handleDragCancel = () => {
