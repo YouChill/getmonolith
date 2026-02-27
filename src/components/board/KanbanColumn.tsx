@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { KanbanCard } from "@/components/board/KanbanCard";
 import type { TaskStatus } from "@/lib/db/types";
+import type { WorkspaceMemberOption } from "@/lib/hooks/use-workspace";
 
 export interface KanbanTaskCard {
   id: string;
@@ -36,7 +37,7 @@ interface KanbanColumnProps {
   onCreateTask: (status: TaskStatus, title: string) => Promise<void>;
   onUpdateTask: (taskId: string, payload: UpdateTaskPayload) => Promise<void>;
   onDeleteTask: (taskId: string) => Promise<void>;
-  assigneeOptions: Array<{ id: string; label: string }>;
+  assigneeOptions: WorkspaceMemberOption[];
 }
 
 function SortableTaskCard({
@@ -52,7 +53,7 @@ function SortableTaskCard({
   disableDrag: boolean;
   onUpdateTask: (taskId: string, payload: UpdateTaskPayload) => Promise<void>;
   onDeleteTask: (taskId: string) => Promise<void>;
-  assigneeOptions: Array<{ id: string; label: string }>;
+  assigneeOptions: WorkspaceMemberOption[];
 }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,

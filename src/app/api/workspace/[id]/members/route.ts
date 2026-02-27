@@ -1,8 +1,25 @@
 import { NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerClient } from "@/lib/supabase/server";
 
 interface MemberRow {
   user_id: string;
+}
+
+function getInitials(value: string): string {
+  const normalized = value.trim();
+
+  if (!normalized) {
+    return "?";
+  }
+
+  const chunks = normalized.split(/\s+/).filter(Boolean);
+
+  if (chunks.length > 1) {
+    return `${chunks[0][0] ?? ""}${chunks[1][0] ?? ""}`.toUpperCase();
+  }
+
+  return normalized.slice(0, 2).toUpperCase();
 }
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
@@ -39,10 +56,28 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     return NextResponse.json({ data: null, error: "Nie udało się pobrać członków workspace." }, { status: 500 });
   }
 
-  const memberOptions = (members ?? []).map((member) => ({
-    id: member.user_id,
-    label: member.user_id,
-  }));
+  const admin = createAdminClient();
+
+  const memberOptions = await Promise.all(
+    (members ?? []).map(async (member) => {
+      const { data: userData } = await admin.auth.admin.getUserById(member.user_id);
+      const metadata = (userData?.user?.user_metadata ?? {}) as {
+        full_name?: string;
+        name?: string;
+        avatar_url?: string;
+        picture?: string;
+      };
+
+      const label = metadata.full_name?.trim() || metadata.name?.trim() || userData?.user?.email || member.user_id;
+
+      return {
+        id: member.user_id,
+        label,
+        avatarUrl: metadata.avatar_url || metadata.picture || undefined,
+        initials: getInitials(label),
+      };
+    })
+  );
 
   return NextResponse.json({
     data: {

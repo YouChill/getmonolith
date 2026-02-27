@@ -21,7 +21,7 @@ import { useBoardFiltersStore, type BoardSortOption } from "@/lib/stores/board-f
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { boardColumnsQueryKey } from "@/lib/react-query/query-keys";
-import { useWorkspace } from "@/lib/hooks/use-workspace";
+import { useWorkspace, type WorkspaceMemberOption } from "@/lib/hooks/use-workspace";
 
 interface KanbanBoardProps {
   workspaceSlug: string;
@@ -103,6 +103,22 @@ function findTaskStatusById(columns: Record<TaskStatus, KanbanTaskCard[]>, id: s
 
 function normalizeColumnPositions(cards: KanbanTaskCard[]) {
   return cards.map((card, index) => ({ ...card, position: index + 1 }));
+}
+
+function getInitials(value: string): string {
+  const normalized = value.trim();
+
+  if (!normalized) {
+    return "?";
+  }
+
+  const chunks = normalized.split(/\s+/).filter(Boolean);
+
+  if (chunks.length > 1) {
+    return `${chunks[0][0] ?? ""}${chunks[1][0] ?? ""}`.toUpperCase();
+  }
+
+  return normalized.slice(0, 2).toUpperCase();
 }
 
 function moveTask(
@@ -232,7 +248,7 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
     return null;
   }, [activeTaskId, boardColumns]);
 
-  const assigneeOptions = useMemo(() => {
+  const assigneeOptions = useMemo<WorkspaceMemberOption[]>(() => {
     const fromWorkspace = workspaceData?.members ?? [];
 
     if (fromWorkspace.length > 0) {
@@ -251,7 +267,7 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
 
     return Array.from(uniqueAssignees)
       .sort((left, right) => left.localeCompare(right))
-      .map((id) => ({ id, label: id }));
+      .map((id) => ({ id, label: id, initials: getInitials(id) }));
   }, [boardColumns, workspaceData?.members]);
 
   const visibleColumns = useMemo(() => {

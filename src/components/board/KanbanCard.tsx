@@ -7,6 +7,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import type { KanbanTaskCard } from "@/components/board/KanbanColumn";
 import type { TaskStatus } from "@/lib/db/types";
+import type { WorkspaceMemberOption } from "@/lib/hooks/use-workspace";
 import { blockQueryKey } from "@/lib/react-query/query-keys";
 
 interface KanbanCardProps {
@@ -14,7 +15,7 @@ interface KanbanCardProps {
   card: KanbanTaskCard;
   onUpdateTask: (taskId: string, payload: { title?: string; status?: TaskStatus; due_date?: string | null; assigned_to?: string | null }) => Promise<void>;
   onDeleteTask: (taskId: string) => Promise<void>;
-  assigneeOptions: Array<{ id: string; label: string }>;
+  assigneeOptions: WorkspaceMemberOption[];
   hideActions?: boolean;
   disableLink?: boolean;
   dragHandle?: ReactNode;
@@ -44,11 +45,6 @@ function isOverdue(dueDate?: string, status?: TaskStatus): boolean {
   return due.getTime() < today.getTime();
 }
 
-function getAssigneeInitials(value?: string) {
-  if (!value) return "?";
-  return value.slice(0, 2).toUpperCase();
-}
-
 export function KanbanCard({
   workspaceSlug,
   card,
@@ -67,10 +63,10 @@ export function KanbanCard({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const queryClient = useQueryClient();
 
-  const assigneeLabel = useMemo(
-    () => assigneeOptions.find((option) => option.id === card.assignee)?.label ?? card.assignee ?? "Nieprzypisane",
-    [assigneeOptions, card.assignee]
-  );
+  const assigneeMember = useMemo(() => assigneeOptions.find((option) => option.id === card.assignee), [assigneeOptions, card.assignee]);
+
+  const assigneeLabel = assigneeMember?.label ?? card.assignee ?? "Nieprzypisane";
+  const assigneeInitials = assigneeMember?.initials ?? "?";
 
   const prefetchBlock = () => {
     queryClient
@@ -130,9 +126,13 @@ export function KanbanCard({
         </div>
 
         <div className="flex items-center gap-1.5">
-          <div className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-bg-elevated text-[10px] font-semibold text-content-secondary">
-            {getAssigneeInitials(card.assignee)}
-          </div>
+          {assigneeMember?.avatarUrl ? (
+            <img src={assigneeMember.avatarUrl} alt={assigneeLabel} className="h-5 w-5 rounded-full object-cover" />
+          ) : (
+            <div className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-bg-elevated text-[10px] font-semibold text-content-secondary">
+              {assigneeInitials}
+            </div>
+          )}
           <User className="h-3.5 w-3.5" aria-hidden="true" />
           <span>{assigneeLabel}</span>
         </div>
