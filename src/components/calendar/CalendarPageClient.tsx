@@ -2,12 +2,13 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { calendarEventsQueryKey } from "@/lib/react-query/query-keys";
 
 export interface CalendarTaskEvent {
   id: string;
@@ -15,6 +16,7 @@ export interface CalendarTaskEvent {
   dueDate: string;
   priority?: "low" | "medium" | "high" | "urgent";
   status?: "todo" | "in_progress" | "done";
+  isOptimistic?: boolean;
 }
 
 export interface CalendarWorkspaceProject {
@@ -35,6 +37,32 @@ interface CalendarDayCell {
   isoDate: string;
   dayOfMonth: number;
   isCurrentMonth: boolean;
+}
+
+interface ApiResponse<T> {
+  data: T | null;
+  error: string | null;
+}
+
+interface BlockApiData {
+  id: string;
+  position?: number;
+  properties: {
+    title?: string;
+    status?: "todo" | "in_progress" | "done";
+    due_date?: string;
+    priority?: "low" | "medium" | "high" | "urgent";
+  };
+}
+
+interface CreateCalendarTaskVars {
+  workspaceId: string;
+  projectId: string;
+  title: string;
+  status: "todo" | "in_progress" | "done";
+  dueDate: string;
+  priority: "low" | "medium" | "high" | "urgent";
+  optimisticId: string;
 }
 
 const WEEKDAY_LABELS = ["Pon", "Wt", "Śr", "Czw", "Pt", "Sob", "Ndz"];
@@ -101,10 +129,17 @@ function CalendarEvent({ workspaceSlug, event }: { workspaceSlug: string; event:
       href={`/${workspaceSlug}/block/${event.id}`}
       className={cn(
         "block truncate rounded-md px-2 py-1 text-xs transition hover:brightness-110",
-        accentClass
+        accentClass,
+        event.isOptimistic && "opacity-60"
       )}
       title={event.title}
-      onClick={(eventClick) => eventClick.stopPropagation()}
+      onClick={(eventClick) => {
+        if (event.isOptimistic) {
+          eventClick.preventDefault();
+        } else {
+          eventClick.stopPropagation();
+        }
+      }}
     >
       {event.title}
     </Link>
@@ -112,26 +147,25 @@ function CalendarEvent({ workspaceSlug, event }: { workspaceSlug: string; event:
 }
 
 function CreateTaskModal({
-  workspaceId,
-  dueDate,
   projects,
+  dueDate,
+  isSubmitting,
   onClose,
-  onCreated,
+  onSubmit,
 }: {
-  workspaceId: string;
-  dueDate: string;
   projects: CalendarWorkspaceProject[];
+  dueDate: string;
+  isSubmitting: boolean;
   onClose: () => void;
-  onCreated: () => void;
+  onSubmit: (data: { title: string; projectId: string; status: "todo" | "in_progress" | "done"; priority: "low" | "medium" | "high" | "urgent" }) => void;
 }) {
   const [title, setTitle] = useState("");
   const [status, setStatus] = useState<"todo" | "in_progress" | "done">("todo");
   const [priority, setPriority] = useState<"low" | "medium" | "high" | "urgent">("medium");
   const [projectId, setProjectId] = useState(projects[0]?.id ?? "");
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!title.trim()) {
@@ -145,31 +179,7 @@ function CreateTaskModal({
     }
 
     setError(null);
-    setIsSubmitting(true);
-
-    const response = await fetch("/api/blocks", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        workspaceId,
-        projectId,
-        type: "task",
-        title: title.trim(),
-        status,
-        dueDate,
-        priority,
-      }),
-    });
-
-    setIsSubmitting(false);
-
-    if (!response.ok) {
-      const payload = (await response.json()) as { error?: string };
-      setError(payload.error ?? "Nie udało się utworzyć zadania.");
-      return;
-    }
-
-    onCreated();
+    onSubmit({ title: title.trim(), projectId, status, priority });
   }
 
   return (
@@ -263,8 +273,113 @@ function CreateTaskModal({
 }
 
 export function CalendarPageClient({ workspaceSlug, workspaceId, workspaceName, activeMonth, events, projects }: CalendarPageClientProps) {
-  const router = useRouter();
+  const queryClient = useQueryClient();
+  const eventsQueryKey = calendarEventsQueryKey(workspaceSlug, activeMonth);
+  const [calendarEvents, setCalendarEvents] = useState(() => {
+    const cached = queryClient.getQueryData<CalendarTaskEvent[]>(eventsQueryKey);
+
+    if (cached) {
+      return cached;
+    }
+
+    queryClient.setQueryData(eventsQueryKey, events);
+    return events;
+  });
+
+  const updateEvents = (updater: CalendarTaskEvent[] | ((previous: CalendarTaskEvent[]) => CalendarTaskEvent[])) => {
+    setCalendarEvents((previous) => {
+      const next = typeof updater === "function" ? updater(previous) : updater;
+      queryClient.setQueryData(eventsQueryKey, next);
+      return next;
+    });
+  };
+
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+
+  // ── Create task mutation ──────────────────────────────────────────────
+  const createTaskMutation = useMutation({
+    mutationFn: async (vars: CreateCalendarTaskVars) => {
+      const response = await fetch("/api/blocks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: vars.workspaceId,
+          projectId: vars.projectId,
+          type: "task",
+          title: vars.title,
+          status: vars.status,
+          dueDate: vars.dueDate,
+          priority: vars.priority,
+        }),
+      });
+
+      const result = (await response.json()) as ApiResponse<BlockApiData>;
+
+      if (!response.ok || !result.data) {
+        throw new Error(result.error ?? "Nie udało się utworzyć zadania.");
+      }
+
+      return result.data;
+    },
+    onMutate: async (vars) => {
+      await queryClient.cancelQueries({ queryKey: eventsQueryKey });
+      const previous = queryClient.getQueryData<CalendarTaskEvent[]>(eventsQueryKey);
+
+      const optimisticEvent: CalendarTaskEvent = {
+        id: vars.optimisticId,
+        title: vars.title,
+        dueDate: vars.dueDate,
+        priority: vars.priority,
+        status: vars.status,
+        isOptimistic: true,
+      };
+
+      updateEvents((prev) => [...prev, optimisticEvent]);
+
+      return { previous, optimisticId: vars.optimisticId };
+    },
+    onSuccess: (data, vars, ctx) => {
+      const createdEvent: CalendarTaskEvent = {
+        id: data.id,
+        title: data.properties.title?.trim() || vars.title,
+        dueDate: data.properties.due_date ?? vars.dueDate,
+        priority: data.properties.priority,
+        status: data.properties.status,
+      };
+
+      updateEvents((prev) =>
+        prev.map((event) => (event.id === ctx.optimisticId ? createdEvent : event))
+      );
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) {
+        updateEvents(ctx.previous);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: eventsQueryKey });
+    },
+  });
+
+  const handleCreateTask = (data: { title: string; projectId: string; status: "todo" | "in_progress" | "done"; priority: "low" | "medium" | "high" | "urgent" }) => {
+    if (!selectedDate) {
+      return;
+    }
+
+    const optimisticId = `optimistic-${Date.now()}`;
+
+    createTaskMutation.mutate({
+      workspaceId,
+      projectId: data.projectId,
+      title: data.title,
+      status: data.status,
+      dueDate: selectedDate,
+      priority: data.priority,
+      optimisticId,
+    });
+
+    setSelectedDate(null);
+  };
 
   const monthDate = parseMonthKey(activeMonth);
   const monthLabel = new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric", timeZone: "UTC" }).format(monthDate);
@@ -272,14 +387,14 @@ export function CalendarPageClient({ workspaceSlug, workspaceId, workspaceName, 
   const eventsByDay = useMemo(() => {
     const grouped = new Map<string, CalendarTaskEvent[]>();
 
-    for (const event of events) {
+    for (const event of calendarEvents) {
       const list = grouped.get(event.dueDate) ?? [];
       list.push(event);
       grouped.set(event.dueDate, list);
     }
 
     return grouped;
-  }, [events]);
+  }, [calendarEvents]);
 
   return (
     <>
@@ -347,14 +462,11 @@ export function CalendarPageClient({ workspaceSlug, workspaceId, workspaceName, 
 
       {selectedDate && (
         <CreateTaskModal
-          workspaceId={workspaceId}
           dueDate={selectedDate}
           projects={projects}
+          isSubmitting={createTaskMutation.isPending}
           onClose={() => setSelectedDate(null)}
-          onCreated={() => {
-            setSelectedDate(null);
-            router.refresh();
-          }}
+          onSubmit={handleCreateTask}
         />
       )}
     </>
