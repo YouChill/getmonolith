@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase/server";
+import { db } from "@/lib/db";
+import { projects } from "@/lib/db/schema";
+import { getAuthUser, requireMembership } from "@/lib/db/queries";
 
 interface CreateProjectPayload {
   workspaceId?: string;
@@ -9,59 +11,46 @@ interface CreateProjectPayload {
 }
 
 export async function POST(request: Request) {
-  const supabase = await createServerClient();
+  const auth = await getAuthUser();
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
+  if (!auth.data) {
     return NextResponse.json({ data: null, error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: CreateProjectPayload;
-  try {
-    body = (await request.json()) as CreateProjectPayload;
-  } catch {
-    return NextResponse.json(
-      { data: null, error: "Invalid JSON in request body" },
-      { status: 400 }
-    );
-  }
+  const user = auth.data;
+  const body = (await request.json()) as CreateProjectPayload;
 
   if (!body.workspaceId || !body.name?.trim()) {
     return NextResponse.json(
       { data: null, error: "workspaceId i name są wymagane." },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
-  const { data: membership, error: membershipError } = await supabase
-    .from("workspace_members")
-    .select("workspace_id")
-    .eq("workspace_id", body.workspaceId)
-    .eq("user_id", user.id)
-    .single();
+  const membership = await requireMembership(body.workspaceId, user.id);
 
-  if (membershipError || !membership) {
+  if (!membership) {
     return NextResponse.json({ data: null, error: "Brak dostępu do workspace." }, { status: 403 });
   }
 
-  const { data, error } = await supabase
-    .from("projects")
-    .insert({
-      workspace_id: body.workspaceId,
+  const [created] = await db
+    .insert(projects)
+    .values({
+      workspaceId: body.workspaceId,
       name: body.name.trim(),
       icon: body.icon?.trim() || "📁",
       color: body.color?.trim() || "#38BDF8",
     })
-    .select("id, name, icon, color")
-    .single();
+    .returning({
+      id: projects.id,
+      name: projects.name,
+      icon: projects.icon,
+      color: projects.color,
+    });
 
-  if (error || !data) {
-    return NextResponse.json({ data: null, error: error?.message ?? "Nie udało się utworzyć projektu." }, { status: 500 });
+  if (!created) {
+    return NextResponse.json({ data: null, error: "Nie udało się utworzyć projektu." }, { status: 500 });
   }
 
-  return NextResponse.json({ data, error: null }, { status: 201 });
+  return NextResponse.json({ data: created, error: null }, { status: 201 });
 }

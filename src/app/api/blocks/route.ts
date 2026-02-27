@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
-import { TASK_STATUSES, type TaskStatus } from "@/lib/db/types";
-import { createServerClient } from "@/lib/supabase/server";
+import { and, desc, eq, isNull } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { blocks } from "@/lib/db/schema";
+import { TASK_STATUSES, type TaskStatus, type TaskProperties, type PageProperties } from "@/lib/db/types";
+import { getAuthUser, requireMembership } from "@/lib/db/queries";
 
 interface CreateBlockPayload {
   workspaceId?: string;
@@ -30,26 +33,14 @@ function isDueDate(value?: string): boolean {
 }
 
 export async function POST(request: Request) {
-  const supabase = await createServerClient();
+  const auth = await getAuthUser();
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
+  if (!auth.data) {
     return NextResponse.json({ data: null, error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: CreateBlockPayload;
-  try {
-    body = (await request.json()) as CreateBlockPayload;
-  } catch {
-    return NextResponse.json(
-      { data: null, error: "Invalid JSON in request body" },
-      { status: 400 }
-    );
-  }
+  const user = auth.data;
+  const body = (await request.json()) as CreateBlockPayload;
 
   if (!body.workspaceId) {
     return NextResponse.json({ data: null, error: "workspaceId jest wymagane." }, { status: 400 });
@@ -59,14 +50,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ data: null, error: "Tytuł jest wymagany." }, { status: 400 });
   }
 
-  const { data: membership, error: membershipError } = await supabase
-    .from("workspace_members")
-    .select("workspace_id")
-    .eq("workspace_id", body.workspaceId)
-    .eq("user_id", user.id)
-    .single();
+  const membership = await requireMembership(body.workspaceId, user.id);
 
-  if (membershipError || !membership) {
+  if (!membership) {
     return NextResponse.json({ data: null, error: "Brak dostępu do workspace." }, { status: 403 });
   }
 
@@ -83,78 +69,99 @@ export async function POST(request: Request) {
       return NextResponse.json({ data: null, error: "Nieprawidłowy format due date (YYYY-MM-DD)." }, { status: 400 });
     }
 
-    const { data: lastTask } = await supabase
-      .from("blocks")
-      .select("position")
-      .eq("workspace_id", body.workspaceId)
-      .eq("project_id", body.projectId)
-      .eq("type", "task")
-      .order("position", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const [lastTask] = await db
+      .select({ position: blocks.position })
+      .from(blocks)
+      .where(
+        and(
+          eq(blocks.workspaceId, body.workspaceId),
+          eq(blocks.projectId, body.projectId),
+          eq(blocks.type, "task"),
+        ),
+      )
+      .orderBy(desc(blocks.position))
+      .limit(1);
 
     const nextPosition = (lastTask?.position ?? 0) + 1;
 
-    const { data, error } = await supabase
-      .from("blocks")
-      .insert({
-        workspace_id: body.workspaceId,
-        project_id: body.projectId,
-        type: "task",
-        created_by: user.id,
-        position: nextPosition,
-        properties: {
-          title: body.title.trim(),
-          status: body.status,
-          due_date: body.dueDate,
-          priority: body.priority,
-        },
-      })
-      .select("id, properties, position")
-      .single();
+    const properties: TaskProperties & { title: string } = {
+      title: body.title.trim(),
+      status: body.status,
+      ...(body.dueDate ? { due_date: body.dueDate } : {}),
+      ...(body.priority ? { priority: body.priority } : {}),
+    };
 
-    if (error || !data) {
-      return NextResponse.json({ data: null, error: error?.message ?? "Nie udało się utworzyć zadania." }, { status: 500 });
+    const [created] = await db
+      .insert(blocks)
+      .values({
+        workspaceId: body.workspaceId,
+        projectId: body.projectId,
+        type: "task",
+        createdBy: user.id,
+        position: nextPosition,
+        properties,
+      })
+      .returning({
+        id: blocks.id,
+        properties: blocks.properties,
+        position: blocks.position,
+      });
+
+    if (!created) {
+      return NextResponse.json({ data: null, error: "Nie udało się utworzyć zadania." }, { status: 500 });
     }
 
-    return NextResponse.json({ data, error: null }, { status: 201 });
+    return NextResponse.json({ data: created, error: null }, { status: 201 });
   }
 
   if (body.type === "page") {
-    const { data: lastPage } = await supabase
-      .from("blocks")
-      .select("position")
-      .eq("workspace_id", body.workspaceId)
-      .eq("type", "page")
-      .is("parent_block_id", body.parentBlockId ?? null)
-      .order("position", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const parentCondition = body.parentBlockId
+      ? eq(blocks.parentBlockId, body.parentBlockId)
+      : isNull(blocks.parentBlockId);
+
+    const [lastPage] = await db
+      .select({ position: blocks.position })
+      .from(blocks)
+      .where(
+        and(
+          eq(blocks.workspaceId, body.workspaceId),
+          eq(blocks.type, "page"),
+          parentCondition,
+        ),
+      )
+      .orderBy(desc(blocks.position))
+      .limit(1);
 
     const nextPosition = (lastPage?.position ?? 0) + 1;
 
-    const { data, error } = await supabase
-      .from("blocks")
-      .insert({
-        workspace_id: body.workspaceId,
+    const properties: PageProperties & { title: string } = {
+      title: body.title.trim(),
+      icon: "📝",
+    };
+
+    const [created] = await db
+      .insert(blocks)
+      .values({
+        workspaceId: body.workspaceId,
         type: "page",
-        created_by: user.id,
-        parent_block_id: body.parentBlockId ?? null,
+        createdBy: user.id,
+        parentBlockId: body.parentBlockId ?? null,
         position: nextPosition,
-        properties: {
-          title: body.title.trim(),
-          icon: "📝",
-        },
+        properties,
         content: [],
       })
-      .select("id, parent_block_id, position, properties")
-      .single();
+      .returning({
+        id: blocks.id,
+        parentBlockId: blocks.parentBlockId,
+        position: blocks.position,
+        properties: blocks.properties,
+      });
 
-    if (error || !data) {
-      return NextResponse.json({ data: null, error: error?.message ?? "Nie udało się utworzyć strony." }, { status: 500 });
+    if (!created) {
+      return NextResponse.json({ data: null, error: "Nie udało się utworzyć strony." }, { status: 500 });
     }
 
-    return NextResponse.json({ data, error: null }, { status: 201 });
+    return NextResponse.json({ data: created, error: null }, { status: 201 });
   }
 
   return NextResponse.json({ data: null, error: "Dozwolone typy bloków: task i page." }, { status: 400 });
