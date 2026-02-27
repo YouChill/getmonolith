@@ -53,7 +53,15 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     return NextResponse.json({ data: null, error: access.error }, { status: access.status });
   }
 
-  const body = (await request.json()) as UpdateProjectPayload;
+  let body: UpdateProjectPayload;
+  try {
+    body = (await request.json()) as UpdateProjectPayload;
+  } catch {
+    return NextResponse.json(
+      { data: null, error: "Invalid JSON in request body" },
+      { status: 400 }
+    );
+  }
   const updates: Record<string, string> = {};
 
   if (typeof body.name === "string" && body.name.trim()) {

@@ -20,7 +20,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ data: null, error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = (await request.json()) as CreateProjectPayload;
+  let body: CreateProjectPayload;
+  try {
+    body = (await request.json()) as CreateProjectPayload;
+  } catch {
+    return NextResponse.json(
+      { data: null, error: "Invalid JSON in request body" },
+      { status: 400 }
+    );
+  }
 
   if (!body.workspaceId || !body.name?.trim()) {
     return NextResponse.json(

@@ -95,7 +95,15 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     return NextResponse.json({ data: null, error: access.error }, { status: access.status });
   }
 
-  const body = (await request.json()) as UpdateBlockPayload;
+  let body: UpdateBlockPayload;
+  try {
+    body = (await request.json()) as UpdateBlockPayload;
+  } catch {
+    return NextResponse.json(
+      { data: null, error: "Invalid JSON in request body" },
+      { status: 400 }
+    );
+  }
   const currentProperties = (access.data.properties ?? {}) as BlockProperties;
 
   if (typeof body.title === "string" && !body.title.trim()) {

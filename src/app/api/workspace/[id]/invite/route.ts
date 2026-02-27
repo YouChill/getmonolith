@@ -20,7 +20,15 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return NextResponse.json({ data: null, error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = (await request.json()) as InvitePayload;
+  let body: InvitePayload;
+  try {
+    body = (await request.json()) as InvitePayload;
+  } catch {
+    return NextResponse.json(
+      { data: null, error: "Invalid JSON in request body" },
+      { status: 400 }
+    );
+  }
   const email = body.email?.trim().toLowerCase();
   const role = body.role;
 

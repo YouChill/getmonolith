@@ -39,7 +39,15 @@ export async function PATCH(
     return NextResponse.json({ data: null, error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = (await request.json()) as UpdateMemberPayload;
+  let body: UpdateMemberPayload;
+  try {
+    body = (await request.json()) as UpdateMemberPayload;
+  } catch {
+    return NextResponse.json(
+      { data: null, error: "Invalid JSON in request body" },
+      { status: 400 }
+    );
+  }
   const role = body.role;
 
   if (!role || !["member", "admin"].includes(role)) {
