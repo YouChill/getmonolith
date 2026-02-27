@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,26 @@ interface BlockPageProps {
   initialIcon?: string;
   initialContent: BlockNoteContent;
   taskData?: BlockPageTaskData;
+}
+
+interface BlockPatchResult {
+  id: string;
+  type: "task" | "page";
+  position?: number;
+  properties?: {
+    title?: string;
+    icon?: string;
+    status?: TaskStatus;
+    due_date?: string;
+    priority?: TaskPriority;
+    assigned_to?: string;
+  };
+  content?: BlockNoteContent;
+}
+
+interface BlockPatchResponse {
+  data: BlockPatchResult | null;
+  error: string | null;
 }
 
 const STATUS_OPTIONS: Array<{ value: TaskStatus; label: string }> = [
@@ -113,7 +133,6 @@ export function BlockPage({
   const [assignee, setAssignee] = useState(taskData?.assignee ?? "");
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [, startTransition] = useTransition();
   const queryClient = useQueryClient();
   const { data: workspaceData } = useWorkspace(workspaceId);
 
@@ -154,6 +173,75 @@ export function BlockPage({
     });
   }, [blockType, initialContent, initialIcon, initialTitle, taskData?.assignee, taskData?.dueDate, taskData?.priority, taskData?.status]);
 
+  // ── Block save mutation ───────────────────────────────────────────────
+  const saveMutation = useMutation({
+    mutationFn: async (body: string) => {
+      const response = await fetch(`/api/blocks/${blockId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+
+      const result = (await response.json()) as BlockPatchResponse;
+
+      if (!response.ok || !result.data) {
+        throw new Error(result.error ?? "Nie udało się zapisać zmian.");
+      }
+
+      return result.data;
+    },
+    onSuccess: (updatedBlock, body) => {
+      queryClient.setQueryData(blockQueryKey(blockId), updatedBlock);
+
+      if (updatedBlock.type === "task" && projectId) {
+        queryClient.setQueryData<Record<TaskStatus, KanbanTaskCard[]> | undefined>(
+          boardColumnsQueryKey(workspaceSlug, projectId),
+          (previous) => {
+            if (!previous) {
+              return previous;
+            }
+
+            const nextStatus = normalizeTaskStatus(updatedBlock.properties?.status);
+
+            return upsertTaskCardInColumns(previous, {
+              id: updatedBlock.id,
+              title: updatedBlock.properties?.title?.trim() || "Bez tytułu",
+              status: nextStatus,
+              position: typeof updatedBlock.position === "number" ? updatedBlock.position : 1,
+              priority: updatedBlock.properties?.priority,
+              dueDate: updatedBlock.properties?.due_date,
+              assignee: updatedBlock.properties?.assigned_to,
+            });
+          }
+        );
+      }
+
+      initialPayloadRef.current = body;
+      setSaveError(null);
+      setSaveState("saved");
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : "Nie udało się zapisać zmian.";
+      setSaveError(message);
+      setSaveState("saved");
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: blockQueryKey(blockId) });
+      if (projectId) {
+        queryClient.invalidateQueries({ queryKey: boardColumnsQueryKey(workspaceSlug, projectId) });
+      }
+    },
+  });
+
+  const triggerSave = useCallback(
+    (body: string) => {
+      saveMutation.mutate(body);
+    },
+    // saveMutation is stable per render but we only need mutate fn reference
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [blockId],
+  );
+
   useEffect(() => {
     if (payloadString === initialPayloadRef.current) {
       return;
@@ -162,78 +250,11 @@ export function BlockPage({
     setSaveState("saving");
 
     const timer = setTimeout(() => {
-      startTransition(async () => {
-        try {
-          const response = await fetch(`/api/blocks/${blockId}`, {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: payloadString,
-          });
-
-          const result = (await response.json()) as {
-            data: {
-              id: string;
-              type: "task" | "page";
-              position?: number;
-              properties?: {
-                title?: string;
-                icon?: string;
-                status?: TaskStatus;
-                due_date?: string;
-                priority?: TaskPriority;
-                assigned_to?: string;
-              };
-              content?: BlockNoteContent;
-            } | null;
-            error: string | null;
-          };
-
-          if (!response.ok || !result.data) {
-            throw new Error(result.error ?? "Nie udało się zapisać zmian.");
-          }
-
-          const updatedBlock = result.data;
-
-          queryClient.setQueryData(blockQueryKey(blockId), updatedBlock);
-
-          if (updatedBlock.type === "task" && projectId) {
-            queryClient.setQueryData<Record<TaskStatus, KanbanTaskCard[]> | undefined>(
-              boardColumnsQueryKey(workspaceSlug, projectId),
-              (previous) => {
-                if (!previous) {
-                  return previous;
-                }
-
-                const nextStatus = normalizeTaskStatus(updatedBlock.properties?.status);
-
-                return upsertTaskCardInColumns(previous, {
-                  id: updatedBlock.id,
-                  title: updatedBlock.properties?.title?.trim() || "Bez tytułu",
-                  status: nextStatus,
-                  position: typeof updatedBlock.position === "number" ? updatedBlock.position : 1,
-                  priority: updatedBlock.properties?.priority,
-                  dueDate: updatedBlock.properties?.due_date,
-              assignee: updatedBlock.properties?.assigned_to,
-                });
-              }
-            );
-          }
-
-          initialPayloadRef.current = payloadString;
-          setSaveError(null);
-          setSaveState("saved");
-        } catch (error) {
-          const message = error instanceof Error ? error.message : "Nie udało się zapisać zmian.";
-          setSaveError(message);
-          setSaveState("saved");
-        }
-      });
+      triggerSave(payloadString);
     }, 1500);
 
     return () => clearTimeout(timer);
-  }, [blockId, payloadString, projectId, queryClient, startTransition, workspaceSlug]);
+  }, [payloadString, triggerSave]);
 
   return (
     <div className="mx-auto flex w-full max-w-7xl gap-6 px-8 py-6">

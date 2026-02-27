@@ -43,7 +43,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
 
   const admin = createAdminClient();
 
-  const memberOptions = await Promise.all(
+  const settled = await Promise.allSettled(
     members.map(async (member) => {
       const { data: userData } = await admin.auth.admin.getUserById(member.userId);
       const metadata = (userData?.user?.user_metadata ?? {}) as {

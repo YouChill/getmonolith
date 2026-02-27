@@ -1,8 +1,9 @@
 "use client";
 
-import { type ComponentType, type FormEvent, useMemo, useState, useTransition } from "react";
+import { type ComponentType, type FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   CalendarDays,
   Check,
@@ -23,6 +24,7 @@ import { NotesTreeSidebar } from "@/components/notes/NotesTreeSidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { sidebarProjectsQueryKey } from "@/lib/react-query/query-keys";
 
 interface WorkspaceItem {
   id: string;
@@ -60,6 +62,16 @@ type ProjectFormState = {
   color: string;
 };
 
+interface ProjectApiResponse {
+  data: ProjectItem | null;
+  error: string | null;
+}
+
+interface DeleteProjectApiResponse {
+  data: { id: string } | null;
+  error: string | null;
+}
+
 const DEFAULT_PROJECT_ICON = "📁";
 const DEFAULT_PROJECT_COLOR = "#38BDF8";
 
@@ -91,7 +103,7 @@ function ProjectModal({
   submitLabel: string;
   initialValues: ProjectFormState;
   pending: boolean;
-  onSubmit: (values: ProjectFormState) => Promise<void>;
+  onSubmit: (values: ProjectFormState) => void;
   onClose: () => void;
 }) {
   const [name, setName] = useState(initialValues.name);
@@ -99,7 +111,7 @@ function ProjectModal({
   const [color, setColor] = useState(initialValues.color || DEFAULT_PROJECT_COLOR);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!name.trim()) {
@@ -108,7 +120,7 @@ function ProjectModal({
     }
 
     setError(null);
-    await onSubmit({ name: name.trim(), icon: icon.trim() || DEFAULT_PROJECT_ICON, color });
+    onSubmit({ name: name.trim(), icon: icon.trim() || DEFAULT_PROJECT_ICON, color });
   }
 
   return (
@@ -196,11 +208,11 @@ export function SidebarSkeleton() {
 export function Sidebar({ currentWorkspaceSlug, workspaceId, workspaces, projects, pages }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { isCollapsed, toggle } = useSidebarStore();
   const [projectItems, setProjectItems] = useState<ProjectItem[]>(projects);
   const [projectModalMode, setProjectModalMode] = useState<"create" | "edit" | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
 
   const selectedProject = useMemo(
     () => projectItems.find((project) => project.id === selectedProjectId) ?? null,
@@ -212,74 +224,146 @@ export function Sidebar({ currentWorkspaceSlug, workspaceId, workspaces, project
     setSelectedProjectId(null);
   }
 
-  async function handleCreateProject(values: ProjectFormState) {
-    const tempId = `temp-${crypto.randomUUID()}`;
-    const optimisticProject: ProjectItem = {
-      id: tempId,
-      name: values.name,
-      icon: values.icon,
-      color: values.color,
-    };
-
-    setProjectItems((current) => [...current, optimisticProject]);
-    closeModal();
-
-    startTransition(async () => {
+  // ── Create project mutation ───────────────────────────────────────────
+  const createProjectMutation = useMutation({
+    mutationFn: async (values: ProjectFormState) => {
       const response = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workspaceId, ...values }),
       });
 
-      if (!response.ok) {
-        setProjectItems((current) => current.filter((project) => project.id !== tempId));
-        return;
+      const payload = (await response.json()) as ProjectApiResponse;
+
+      if (!response.ok || !payload.data) {
+        throw new Error(payload.error ?? "Nie udało się utworzyć projektu.");
       }
 
-      const payload = (await response.json()) as { data?: ProjectItem };
-      if (!payload.data) {
-        setProjectItems((current) => current.filter((project) => project.id !== tempId));
-        return;
+      return payload.data;
+    },
+    onMutate: async (values) => {
+      const tempId = `temp-${crypto.randomUUID()}`;
+      const optimisticProject: ProjectItem = {
+        id: tempId,
+        name: values.name,
+        icon: values.icon,
+        color: values.color,
+      };
+
+      const previousProjects = projectItems;
+      setProjectItems((current) => [...current, optimisticProject]);
+      closeModal();
+
+      return { previousProjects, tempId };
+    },
+    onSuccess: (data, _values, ctx) => {
+      if (ctx) {
+        setProjectItems((current) =>
+          current.map((project) => (project.id === ctx.tempId ? data : project))
+        );
       }
 
-      setProjectItems((current) =>
-        current.map((project) => (project.id === tempId ? payload.data! : project))
-      );
-
-      router.push(`/${currentWorkspaceSlug}/board/${payload.data.id}`);
+      router.push(`/${currentWorkspaceSlug}/board/${data.id}`);
+    },
+    onError: (_err, _values, ctx) => {
+      if (ctx) {
+        setProjectItems(ctx.previousProjects);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: sidebarProjectsQueryKey(workspaceId) });
       router.refresh();
-    });
+    },
+  });
+
+  // ── Update project mutation ───────────────────────────────────────────
+  const updateProjectMutation = useMutation({
+    mutationFn: async (vars: { projectId: string; values: ProjectFormState }) => {
+      const response = await fetch(`/api/projects/${vars.projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(vars.values),
+      });
+
+      const payload = (await response.json()) as ProjectApiResponse;
+
+      if (!response.ok || !payload.data) {
+        throw new Error(payload.error ?? "Nie udało się zaktualizować projektu.");
+      }
+
+      return payload.data;
+    },
+    onMutate: async (vars) => {
+      const previousProjects = projectItems;
+      setProjectItems((current) =>
+        current.map((project) =>
+          project.id === vars.projectId
+            ? { ...project, name: vars.values.name, icon: vars.values.icon, color: vars.values.color }
+            : project
+        )
+      );
+      closeModal();
+
+      return { previousProjects };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx) {
+        setProjectItems(ctx.previousProjects);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: sidebarProjectsQueryKey(workspaceId) });
+      router.refresh();
+    },
+  });
+
+  // ── Delete project mutation ───────────────────────────────────────────
+  const deleteProjectMutation = useMutation({
+    mutationFn: async (vars: { projectId: string }) => {
+      const response = await fetch(`/api/projects/${vars.projectId}`, {
+        method: "DELETE",
+      });
+
+      const payload = (await response.json()) as DeleteProjectApiResponse;
+
+      if (!response.ok || !payload.data) {
+        throw new Error(payload.error ?? "Nie udało się usunąć projektu.");
+      }
+
+      return payload.data;
+    },
+    onMutate: async (vars) => {
+      const previousProjects = projectItems;
+      setProjectItems((current) => current.filter((item) => item.id !== vars.projectId));
+
+      return { previousProjects, projectId: vars.projectId };
+    },
+    onSuccess: (_data, vars) => {
+      if (pathname.startsWith(`/${currentWorkspaceSlug}/board/${vars.projectId}`)) {
+        router.push(`/${currentWorkspaceSlug}/board`);
+      }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx) {
+        setProjectItems(ctx.previousProjects);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: sidebarProjectsQueryKey(workspaceId) });
+      router.refresh();
+    },
+  });
+
+  function handleCreateProject(values: ProjectFormState) {
+    createProjectMutation.mutate(values);
   }
 
-  async function handleUpdateProject(values: ProjectFormState) {
+  function handleUpdateProject(values: ProjectFormState) {
     if (!selectedProject) {
       return;
     }
 
-    const previousProjects = projectItems;
-    setProjectItems((current) =>
-      current.map((project) =>
-        project.id === selectedProject.id
-          ? { ...project, name: values.name, icon: values.icon, color: values.color }
-          : project
-      )
-    );
-    closeModal();
-
-    startTransition(async () => {
-      const response = await fetch(`/api/projects/${selectedProject.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
-      });
-
-      if (!response.ok) {
-        setProjectItems(previousProjects);
-        return;
-      }
-
-      router.refresh();
-    });
+    updateProjectMutation.mutate({ projectId: selectedProject.id, values });
   }
 
   function handleDeleteProject(project: ProjectItem) {
@@ -291,26 +375,10 @@ export function Sidebar({ currentWorkspaceSlug, workspaceId, workspaces, project
       return;
     }
 
-    const previousProjects = projectItems;
-    setProjectItems((current) => current.filter((item) => item.id !== project.id));
-
-    startTransition(async () => {
-      const response = await fetch(`/api/projects/${project.id}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        setProjectItems(previousProjects);
-        return;
-      }
-
-      if (pathname.startsWith(`/${currentWorkspaceSlug}/board/${project.id}`)) {
-        router.push(`/${currentWorkspaceSlug}/board`);
-      }
-
-      router.refresh();
-    });
+    deleteProjectMutation.mutate({ projectId: project.id });
   }
+
+  const isPending = createProjectMutation.isPending || updateProjectMutation.isPending || deleteProjectMutation.isPending;
 
   return (
     <aside
