@@ -1,47 +1,61 @@
 "use client";
 
-import { FormEvent, useState, useTransition } from "react";
+import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { workspaceMembersQueryKey } from "@/lib/react-query/query-keys";
 
 interface InviteMemberFormProps {
   workspaceId: string;
 }
 
+interface InviteResponse {
+  data: { userId: string; email: string; role: string } | null;
+  error: string | null;
+}
+
 export function InviteMemberForm({ workspaceId }: InviteMemberFormProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"member" | "admin">("member");
-  const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-    setSuccess(null);
-
-    startTransition(async () => {
+  const inviteMutation = useMutation({
+    mutationFn: async (vars: { email: string; role: "member" | "admin" }) => {
       const response = await fetch(`/api/workspace/${workspaceId}/invite`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, role }),
+        body: JSON.stringify({ email: vars.email, role: vars.role }),
       });
 
-      const payload = (await response.json()) as { error?: string };
+      const payload = (await response.json()) as InviteResponse;
 
-      if (!response.ok) {
-        setError(payload.error ?? "Nie udało się wysłać zaproszenia.");
-        return;
+      if (!response.ok || !payload.data) {
+        throw new Error(payload.error ?? "Nie udało się wysłać zaproszenia.");
       }
 
-      setSuccess(`Zaproszenie wysłane do ${email}.`);
+      return payload.data;
+    },
+    onSuccess: (data) => {
+      setSuccess(`Zaproszenie wysłane do ${data.email}.`);
       setEmail("");
       setRole("member");
       router.refresh();
-    });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: workspaceMembersQueryKey(workspaceId) });
+    },
+  });
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSuccess(null);
+    inviteMutation.reset();
+    inviteMutation.mutate({ email, role });
   }
 
   return (
@@ -76,12 +90,14 @@ export function InviteMemberForm({ workspaceId }: InviteMemberFormProps) {
         </div>
       </div>
 
-      {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+      {inviteMutation.isError && (
+        <p className="mt-3 text-sm text-red-400">{inviteMutation.error.message}</p>
+      )}
       {success && <p className="mt-3 text-sm text-emerald-400">{success}</p>}
 
       <div className="mt-4">
-        <Button type="submit" disabled={pending}>
-          {pending ? "Wysyłanie..." : "Wyślij zaproszenie"}
+        <Button type="submit" disabled={inviteMutation.isPending}>
+          {inviteMutation.isPending ? "Wysyłanie..." : "Wyślij zaproszenie"}
         </Button>
       </div>
     </form>

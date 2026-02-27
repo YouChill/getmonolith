@@ -5,3 +5,6 @@ export const boardColumnsQueryKey = (workspaceSlug: string, projectId: string) =
 
 export const calendarEventsQueryKey = (workspaceSlug: string, activeMonth: string) =>
   ["calendar-events", workspaceSlug, activeMonth] as const;
+
+export const workspaceMembersQueryKey = (workspaceId: string) =>
+  ["workspace-members", workspaceId] as const;
