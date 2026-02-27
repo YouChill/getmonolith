@@ -5,6 +5,8 @@ import { useQuery } from "@tanstack/react-query";
 export interface WorkspaceMemberOption {
   id: string;
   label: string;
+  avatarUrl?: string;
+  initials: string;
 }
 
 interface UseWorkspaceResponse {
