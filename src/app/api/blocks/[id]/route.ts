@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { blocks } from "@/lib/db/schema";
 import { TASK_STATUSES, type TaskStatus } from "@/lib/db/types";
-import { createServerClient } from "@/lib/supabase/server";
+import { getAuthUser, getBlockWithAccessCheck, requireMembership } from "@/lib/db/queries";
 
 interface UpdateBlockPayload {
   title?: string;
@@ -23,16 +26,6 @@ interface BlockProperties {
   icon?: string;
 }
 
-interface AccessibleBlock {
-  id: string;
-  workspace_id: string;
-  project_id?: string | null;
-  content?: unknown;
-  position?: number;
-  type: string;
-  properties: BlockProperties | null;
-}
-
 function isTaskStatus(value?: string): value is TaskStatus {
   if (!value) {
     return false;
@@ -49,53 +42,30 @@ function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
-async function ensureBlockAccess(blockId: string, userId: string) {
-  const supabase = await createServerClient();
-
-  const { data: block, error: blockError } = await supabase
-    .from("blocks")
-    .select("id, workspace_id, type, properties")
-    .eq("id", blockId)
-    .single<AccessibleBlock>();
-
-  if (blockError || !block) {
-    return { data: null, error: "Block not found", status: 404 as const, supabase };
-  }
-
-  const { data: membership, error: membershipError } = await supabase
-    .from("workspace_members")
-    .select("workspace_id")
-    .eq("workspace_id", block.workspace_id)
-    .eq("user_id", userId)
-    .single();
-
-  if (membershipError || !membership) {
-    return { data: null, error: "Forbidden", status: 403 as const, supabase };
-  }
-
-  return { data: block, error: null, status: 200 as const, supabase };
-}
-
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  const supabase = await createServerClient();
+  const auth = await getAuthUser();
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
+  if (!auth.data) {
     return NextResponse.json({ data: null, error: "Unauthorized" }, { status: 401 });
   }
 
-  const access = await ensureBlockAccess(id, user.id);
+  const user = auth.data;
+  const access = await getBlockWithAccessCheck(id, user.id);
 
   if (access.error || !access.data) {
     return NextResponse.json({ data: null, error: access.error }, { status: access.status });
   }
 
-  const body = (await request.json()) as UpdateBlockPayload;
+  let body: UpdateBlockPayload;
+  try {
+    body = (await request.json()) as UpdateBlockPayload;
+  } catch {
+    return NextResponse.json(
+      { data: null, error: "Invalid JSON in request body" },
+      { status: 400 }
+    );
+  }
   const currentProperties = (access.data.properties ?? {}) as BlockProperties;
 
   if (typeof body.title === "string" && !body.title.trim()) {
@@ -120,14 +90,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         return NextResponse.json({ data: null, error: "assigned_to musi być UUID." }, { status: 400 });
       }
 
-      const { data: assigneeMembership, error: assigneeError } = await access.supabase
-        .from("workspace_members")
-        .select("user_id")
-        .eq("workspace_id", access.data.workspace_id)
-        .eq("user_id", body.assigned_to)
-        .single();
+      const assigneeMembership = await requireMembership(access.data.workspaceId, body.assigned_to);
 
-      if (assigneeError || !assigneeMembership) {
+      if (!assigneeMembership) {
         return NextResponse.json({ data: null, error: "Użytkownik nie należy do workspace." }, { status: 400 });
       }
     }
@@ -186,81 +151,87 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     nextProperties.icon = body.icon.trim() || "📝";
   }
 
-
-  const { data, error } = await access.supabase
-    .from("blocks")
-    .update({
+  const [updated] = await db
+    .update(blocks)
+    .set({
       properties: nextProperties,
       ...(typeof body.position === "number" ? { position: body.position } : {}),
-      ...(typeof body.parent_block_id !== "undefined" ? { parent_block_id: body.parent_block_id } : {}),
+      ...(typeof body.parent_block_id !== "undefined" ? { parentBlockId: body.parent_block_id } : {}),
       ...(typeof body.content !== "undefined" ? { content: body.content } : {}),
-      updated_at: new Date().toISOString(),
+      updatedAt: new Date(),
     })
-    .eq("id", id)
-    .select("id, type, properties, content, position, parent_block_id")
-    .single();
+    .where(eq(blocks.id, id))
+    .returning({
+      id: blocks.id,
+      type: blocks.type,
+      properties: blocks.properties,
+      content: blocks.content,
+      position: blocks.position,
+      parentBlockId: blocks.parentBlockId,
+    });
 
-  if (error || !data) {
-    return NextResponse.json({ data: null, error: error?.message ?? "Nie udało się zaktualizować bloku." }, { status: 500 });
+  if (!updated) {
+    return NextResponse.json({ data: null, error: "Nie udało się zaktualizować bloku." }, { status: 500 });
   }
 
-  return NextResponse.json({ data, error: null });
+  return NextResponse.json({ data: updated, error: null });
 }
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  const supabase = await createServerClient();
+  const auth = await getAuthUser();
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
+  if (!auth.data) {
     return NextResponse.json({ data: null, error: "Unauthorized" }, { status: 401 });
   }
 
-  const access = await ensureBlockAccess(id, user.id);
+  const user = auth.data;
+  const access = await getBlockWithAccessCheck(id, user.id);
 
   if (access.error || !access.data) {
     return NextResponse.json({ data: null, error: access.error }, { status: access.status });
   }
 
-  const { data, error } = await access.supabase
-    .from("blocks")
-    .select("id, type, workspace_id, project_id, properties, content, position, parent_block_id")
-    .eq("id", id)
-    .single<AccessibleBlock>();
+  const [block] = await db
+    .select({
+      id: blocks.id,
+      type: blocks.type,
+      workspaceId: blocks.workspaceId,
+      projectId: blocks.projectId,
+      properties: blocks.properties,
+      content: blocks.content,
+      position: blocks.position,
+      parentBlockId: blocks.parentBlockId,
+    })
+    .from(blocks)
+    .where(eq(blocks.id, id))
+    .limit(1);
 
-  if (error || !data) {
-    return NextResponse.json({ data: null, error: error?.message ?? "Nie udało się pobrać bloku." }, { status: 500 });
+  if (!block) {
+    return NextResponse.json({ data: null, error: "Nie udało się pobrać bloku." }, { status: 500 });
   }
 
-  return NextResponse.json({ data, error: null });
+  return NextResponse.json({ data: block, error: null });
 }
 
 export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  const supabase = await createServerClient();
+  const auth = await getAuthUser();
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
+  if (!auth.data) {
     return NextResponse.json({ data: null, error: "Unauthorized" }, { status: 401 });
   }
 
-  const access = await ensureBlockAccess(id, user.id);
+  const user = auth.data;
+  const access = await getBlockWithAccessCheck(id, user.id);
 
   if (access.error || !access.data) {
     return NextResponse.json({ data: null, error: access.error }, { status: access.status });
   }
 
-  const { error } = await access.supabase.from("blocks").delete().eq("id", id);
+  const deleted = await db.delete(blocks).where(eq(blocks.id, id)).returning({ id: blocks.id });
 
-  if (error) {
+  if (!deleted.length) {
     return NextResponse.json({ data: null, error: "Nie udało się usunąć bloku." }, { status: 500 });
   }
 

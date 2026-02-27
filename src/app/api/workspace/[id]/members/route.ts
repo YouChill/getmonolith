@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { workspaceMembers } from "@/lib/db/schema";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createServerClient } from "@/lib/supabase/server";
-
-interface MemberRow {
-  user_id: string;
-}
+import { getAuthUser, requireMembership } from "@/lib/db/queries";
 
 function getInitials(value: string): string {
   const normalized = value.trim();
@@ -24,43 +23,29 @@ function getInitials(value: string): string {
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   const { id: workspaceId } = await context.params;
-  const supabase = await createServerClient();
+  const auth = await getAuthUser();
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
+  if (!auth.data) {
     return NextResponse.json({ data: null, error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: membership, error: membershipError } = await supabase
-    .from("workspace_members")
-    .select("workspace_id")
-    .eq("workspace_id", workspaceId)
-    .eq("user_id", user.id)
-    .single();
+  const user = auth.data;
+  const membership = await requireMembership(workspaceId, user.id);
 
-  if (membershipError || !membership) {
+  if (!membership) {
     return NextResponse.json({ data: null, error: "Brak dostępu do workspace." }, { status: 403 });
   }
 
-  const { data: members, error: membersError } = await supabase
-    .from("workspace_members")
-    .select("user_id")
-    .eq("workspace_id", workspaceId)
-    .returns<MemberRow[]>();
-
-  if (membersError) {
-    return NextResponse.json({ data: null, error: "Nie udało się pobrać członków workspace." }, { status: 500 });
-  }
+  const members = await db
+    .select({ userId: workspaceMembers.userId })
+    .from(workspaceMembers)
+    .where(eq(workspaceMembers.workspaceId, workspaceId));
 
   const admin = createAdminClient();
 
-  const settled = await Promise.allSettled(
-    (members ?? []).map(async (member) => {
-      const { data: userData } = await admin.auth.admin.getUserById(member.user_id);
+  const memberOptions = await Promise.all(
+    members.map(async (member) => {
+      const { data: userData } = await admin.auth.admin.getUserById(member.userId);
       const metadata = (userData?.user?.user_metadata ?? {}) as {
         full_name?: string;
         name?: string;
@@ -68,15 +53,15 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
         picture?: string;
       };
 
-      const label = metadata.full_name?.trim() || metadata.name?.trim() || userData?.user?.email || member.user_id;
+      const label = metadata.full_name?.trim() || metadata.name?.trim() || userData?.user?.email || member.userId;
 
       return {
-        id: member.user_id,
+        id: member.userId,
         label,
         avatarUrl: metadata.avatar_url || metadata.picture || undefined,
         initials: getInitials(label),
       };
-    })
+    }),
   );
 
   const memberOptions = settled

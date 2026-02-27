@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase/server";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { blocks, projects } from "@/lib/db/schema";
+import { getAuthUser, getProjectWithAccessCheck } from "@/lib/db/queries";
 
 interface UpdateProjectPayload {
   name?: string;
@@ -7,54 +10,23 @@ interface UpdateProjectPayload {
   color?: string;
 }
 
-async function ensureProjectAccess(projectId: string, userId: string) {
-  const supabase = await createServerClient();
-
-  const { data: project, error: projectError } = await supabase
-    .from("projects")
-    .select("id, workspace_id")
-    .eq("id", projectId)
-    .single();
-
-  if (projectError || !project) {
-    return { data: null, error: "Project not found", status: 404 as const, supabase };
-  }
-
-  const { data: membership, error: membershipError } = await supabase
-    .from("workspace_members")
-    .select("workspace_id")
-    .eq("workspace_id", project.workspace_id)
-    .eq("user_id", userId)
-    .single();
-
-  if (membershipError || !membership) {
-    return { data: null, error: "Forbidden", status: 403 as const, supabase };
-  }
-
-  return { data: project, error: null, status: 200 as const, supabase };
-}
-
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  const supabase = await createServerClient();
+  const auth = await getAuthUser();
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
+  if (!auth.data) {
     return NextResponse.json({ data: null, error: "Unauthorized" }, { status: 401 });
   }
 
-  const access = await ensureProjectAccess(id, user.id);
+  const user = auth.data;
+  const access = await getProjectWithAccessCheck(id, user.id);
 
   if (access.error || !access.data) {
     return NextResponse.json({ data: null, error: access.error }, { status: access.status });
   }
 
   const body = (await request.json()) as UpdateProjectPayload;
-  const updates: Record<string, string> = {};
+  const updates: Partial<{ name: string; icon: string; color: string }> = {};
 
   if (typeof body.name === "string" && body.name.trim()) {
     updates.name = body.name.trim();
@@ -72,57 +44,44 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     return NextResponse.json({ data: null, error: "Brak danych do aktualizacji." }, { status: 400 });
   }
 
-  const { data, error } = await access.supabase
-    .from("projects")
-    .update(updates)
-    .eq("id", id)
-    .select("id, name, icon, color")
-    .single();
+  const [updated] = await db
+    .update(projects)
+    .set(updates)
+    .where(eq(projects.id, id))
+    .returning({
+      id: projects.id,
+      name: projects.name,
+      icon: projects.icon,
+      color: projects.color,
+    });
 
-  if (error || !data) {
-    return NextResponse.json({ data: null, error: error?.message ?? "Nie udało się zaktualizować projektu." }, { status: 500 });
+  if (!updated) {
+    return NextResponse.json({ data: null, error: "Nie udało się zaktualizować projektu." }, { status: 500 });
   }
 
-  return NextResponse.json({ data, error: null });
+  return NextResponse.json({ data: updated, error: null });
 }
 
 export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  const supabase = await createServerClient();
+  const auth = await getAuthUser();
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
+  if (!auth.data) {
     return NextResponse.json({ data: null, error: "Unauthorized" }, { status: 401 });
   }
 
-  const access = await ensureProjectAccess(id, user.id);
+  const user = auth.data;
+  const access = await getProjectWithAccessCheck(id, user.id);
 
   if (access.error || !access.data) {
     return NextResponse.json({ data: null, error: access.error }, { status: access.status });
   }
 
-  const { error: deleteBlocksError } = await access.supabase
-    .from("blocks")
-    .delete()
-    .eq("project_id", id);
+  await db.delete(blocks).where(eq(blocks.projectId, id));
 
-  if (deleteBlocksError) {
-    return NextResponse.json(
-      { data: null, error: "Nie udało się usunąć bloków projektu." },
-      { status: 500 }
-    );
-  }
+  const deleted = await db.delete(projects).where(eq(projects.id, id)).returning({ id: projects.id });
 
-  const { error: deleteProjectError } = await access.supabase
-    .from("projects")
-    .delete()
-    .eq("id", id);
-
-  if (deleteProjectError) {
+  if (!deleted.length) {
     return NextResponse.json({ data: null, error: "Nie udało się usunąć projektu." }, { status: 500 });
   }
 
