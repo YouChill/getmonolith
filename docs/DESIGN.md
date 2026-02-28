@@ -187,9 +187,19 @@ Height:        h-9, rounded-md (6px)
 ### Badge statusu
 
 ```
-todo:          bg-zinc-800 text-zinc-400
-in_progress:   bg-blue-950 text-blue-400
-done:          bg-green-950 text-green-400
+todo:          bg-status-todo-bg text-status-todo-text
+in_progress:   bg-status-in-progress-bg text-status-in-progress-text
+done:          bg-status-done-bg text-status-done-text
+Rozmiar:       text-xs px-2 py-0.5 rounded-full font-medium
+```
+
+### Badge priorytetu
+
+```
+low:           bg-priority-low-bg text-priority-low-text
+medium:        bg-priority-medium-bg text-priority-medium-text
+high:          bg-priority-high-bg text-priority-high-text
+urgent:        bg-priority-urgent-bg text-priority-urgent-text
 Rozmiar:       text-xs px-2 py-0.5 rounded-full font-medium
 ```
 

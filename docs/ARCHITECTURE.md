@@ -4,8 +4,8 @@
 
 | Warstwa | Technologia | Uwagi |
 |---|---|---|
-| Frontend | Next.js 14+ (App Router) | TypeScript strict, RSC domyślnie |
-| Styling | Tailwind CSS + shadcn/ui | Spójny system komponentów |
+| Frontend | Next.js 16+ (App Router) | TypeScript strict, RSC domyślnie |
+| Styling | Tailwind CSS v4 + shadcn/ui | Tokeny w `@theme inline {}` w globals.css |
 | State / server | TanStack React Query | Mutacje z optimistic updates |
 | State / UI | Zustand | Lokalny stan UI (sidebar, modal, drag) |
 | Backend/API | Next.js Route Handlers `/app/api/` | Mutacje; odczyty przez Supabase w RSC |
@@ -205,6 +205,46 @@ const updateTaskStatus = useMutation({
 - **Supabase SSR:** zawsze `createServerClient` z `@supabase/ssr` w RSC i Route Handlers
 - **Drizzle:** każda zmiana schematu przez `drizzle-kit generate` + osobny plik migracji
 - **Zmienne środowiskowe:** zawsze dokumentowane w komentarzu na górze pliku jeśli wymagane
+- **Mutacje klienckie:** zawsze `useMutation` z `@tanstack/react-query` z pełnym wzorcem `onMutate`/`onError`/`onSettled`
+- **Query keys:** centralizowane w `src/lib/react-query/query-keys.ts`
+- **Parsowanie JSON na kliencie:** `safeJson<T>(response)` z `@/lib/utils` zamiast `response.json()`
+- **Tailwind v4:** brak `tailwind.config.ts` — tokeny w `@theme inline {}` w `src/app/globals.css`
+
+---
+
+## Error Handling
+
+### Route Handlers — `request.json()`
+
+Wszystkie Route Handlers opakowują `request.json()` w try-catch:
+
+```typescript
+let body: { name: string };
+try {
+  body = await request.json();
+} catch {
+  return NextResponse.json(
+    { data: null, error: "Invalid JSON body" },
+    { status: 400 }
+  );
+}
+```
+
+### Klient — `safeJson<T>(response)`
+
+Na kliencie zamiast `(await response.json()) as T` używaj utility:
+
+```typescript
+import { safeJson } from "@/lib/utils";
+
+const result = await safeJson<{ data: Block; error: string | null }>(response);
+```
+
+`safeJson` łapie `SyntaxError` i zwraca `{ data: null, error: "..." }` zamiast rzucać.
+
+### React Query `queryFn`
+
+W `queryFn` dopuszczalny jest `throw new Error(...)` — React Query łapie błędy automatycznie. Dodaj komentarz `// React Query catches this` dla jasności.
 
 ---
 

@@ -5,7 +5,7 @@
 
 ## Quick Reference
 
-- **Stack:** Next.js 14+ (App Router) · TypeScript strict · Tailwind CSS · shadcn/ui · Supabase · Drizzle ORM
+- **Stack:** Next.js 16+ (App Router) · TypeScript strict · Tailwind CSS v4 · shadcn/ui · Supabase · Drizzle ORM
 - **GitHub Issues:** `gh issue list` — pracuj issue po issue, milestone po milestone
 - **Docs:** `docs/ARCHITECTURE.md` (model danych, API, konwencje) · `docs/DESIGN.md` (paleta, typografia, komponenty)
 - **Env:** `.env.local` — patrz `.env.local.example`
@@ -45,9 +45,10 @@
   /supabase    # createServerClient, createBrowserClient
   /db          # Drizzle schema + migracje
   /hooks       # useOptimisticTask, useWorkspace, itp.
-  /utils
-  /query       # React Query keys + prefetch helpers
-/types         # Globalne typy TS
+  /utils       # cn(), safeJson()
+  /react-query # React Query keys (query-keys.ts)
+  /stores      # Zustand stores
+/types         # Globalne typy TS (np. blocknote.ts)
 ```
 
 ## Kluczowe konwencje
@@ -58,6 +59,10 @@
 - **Drizzle:** zmiany schematu → `drizzle-kit generate` → osobny plik migracji
 - **Kanban kolumny MVP:** statyczne `todo | in_progress | done`
 - **Biblioteki:** `@dnd-kit` (DnD), `@blocknote/react` (edytor), `zustand` (UI state), `@tanstack/react-query` (server state)
+- **Tailwind v4:** Brak `tailwind.config.ts` — tokeny przez `--color-*` CSS properties w `@theme inline {}` w `src/app/globals.css`
+- **Mutacje:** Zawsze `useMutation` z `@tanstack/react-query` z pełnym wzorcem `onMutate`/`onError`/`onSettled`
+- **Parsowanie JSON:** W klientach używaj `safeJson<T>(response)` z `@/lib/utils` zamiast `response.json()`
+- **Query keys:** Centralizowane w `src/lib/react-query/query-keys.ts`
 
 ## Workflow
 
