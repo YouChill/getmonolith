@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { BlockNoteEditor } from "@/components/editor/block-note-editor";
-import type { BlockNoteContent } from "@/lib/types/blocknote";
+import type { BlockNoteContent } from "@/types/blocknote";
 import type { TaskStatus } from "@/lib/db/types";
 import type { KanbanTaskCard } from "@/components/board/kanban-column";
 import { blockQueryKey, boardColumnsQueryKey } from "@/lib/react-query/query-keys";

@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { BlockNoteView } from "@blocknote/mantine";
 import { useCreateBlockNote } from "@blocknote/react";
-import type { BlockNoteContent } from "@/lib/types/blocknote";
+import type { BlockNoteContent } from "@/types/blocknote";
 
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
