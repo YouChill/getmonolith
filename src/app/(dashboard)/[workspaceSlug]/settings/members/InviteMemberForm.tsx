@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { workspaceMembersQueryKey } from "@/lib/react-query/query-keys";
+import { safeJson } from "@/lib/utils";
 
 interface InviteMemberFormProps {
   workspaceId: string;
@@ -32,7 +33,7 @@ export function InviteMemberForm({ workspaceId }: InviteMemberFormProps) {
         body: JSON.stringify({ email: vars.email, role: vars.role }),
       });
 
-      const payload = (await response.json()) as InviteResponse;
+      const payload = await safeJson<InviteResponse>(response);
 
       if (!response.ok || !payload.data) {
         throw new Error(payload.error ?? "Nie udało się wysłać zaproszenia.");

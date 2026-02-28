@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { safeJson } from "@/lib/utils";
 
 export interface WorkspaceMemberOption {
   id: string;
@@ -25,8 +26,9 @@ export function useWorkspace(workspaceId: string) {
     queryKey: ["workspace", workspaceId],
     queryFn: async () => {
       const response = await fetch(`/api/workspace/${workspaceId}/members`);
-      const result = (await response.json()) as WorkspaceApiResponse;
+      const result = await safeJson<WorkspaceApiResponse>(response);
 
+      // React Query catches this — throw is intentional for queryFn
       if (!response.ok || !result.data) {
         throw new Error(result.error ?? "Nie udało się pobrać workspace.");
       }

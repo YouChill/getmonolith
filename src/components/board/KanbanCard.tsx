@@ -9,6 +9,7 @@ import type { KanbanTaskCard } from "@/components/board/KanbanColumn";
 import type { TaskStatus } from "@/lib/db/types";
 import type { WorkspaceMemberOption } from "@/lib/hooks/use-workspace";
 import { blockQueryKey } from "@/lib/react-query/query-keys";
+import { safeJson } from "@/lib/utils";
 
 interface KanbanCardProps {
   workspaceSlug: string;
@@ -74,7 +75,8 @@ export function KanbanCard({
         queryKey: blockQueryKey(card.id),
         queryFn: async () => {
           const response = await fetch(`/api/blocks/${card.id}`);
-          const result = (await response.json()) as { data: unknown; error: string | null };
+          const result = await safeJson<{ data: unknown; error: string | null }>(response);
+          // React Query catches this — throw is intentional for queryFn
           if (!response.ok || !result.data) throw new Error(result.error ?? "Nie udało się pobrać bloku.");
           return result.data;
         },

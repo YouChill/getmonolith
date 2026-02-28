@@ -13,6 +13,7 @@ import type { TaskStatus } from "@/lib/db/types";
 import type { KanbanTaskCard } from "@/components/board/KanbanColumn";
 import { blockQueryKey, boardColumnsQueryKey } from "@/lib/react-query/query-keys";
 import { useWorkspace } from "@/lib/hooks/use-workspace";
+import { safeJson } from "@/lib/utils";
 
 type TaskPriority = "low" | "medium" | "high" | "urgent";
 
@@ -182,7 +183,7 @@ export function BlockPage({
         body,
       });
 
-      const result = (await response.json()) as BlockPatchResponse;
+      const result = await safeJson<BlockPatchResponse>(response);
 
       if (!response.ok || !result.data) {
         throw new Error(result.error ?? "Nie udało się zapisać zmian.");
