@@ -2,6 +2,7 @@
 
 import {
   closestCorners,
+  defaultDropAnimationSideEffects,
   DndContext,
   DragOverlay,
   MouseSensor,
@@ -10,6 +11,7 @@ import {
   useSensors,
   type DragEndEvent,
   type DragStartEvent,
+  type DropAnimation,
 } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
 import { useCallback, useMemo, useState } from "react";
@@ -89,6 +91,12 @@ const PRIORITY_ORDER: Record<NonNullable<KanbanTaskCard["priority"]>, number> = 
   high: 3,
   medium: 2,
   low: 1,
+};
+
+const DROP_ANIMATION: DropAnimation = {
+  sideEffects: defaultDropAnimationSideEffects({
+    styles: { active: { opacity: "0.4" } },
+  }),
 };
 
 function isTaskStatus(value: string): value is TaskStatus {
@@ -560,13 +568,8 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
-    setActiveTaskId(null);
-
-    if (!isPositionSort) {
-      return;
-    }
-
-    if (!event.over) {
+    if (!isPositionSort || !event.over) {
+      setActiveTaskId(null);
       return;
     }
 
@@ -574,12 +577,14 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
     const overId = String(event.over.id);
 
     if (activeId === overId) {
+      setActiveTaskId(null);
       return;
     }
 
     const { nextColumns, movedTask } = moveTask(boardColumns, activeId, overId);
 
     if (!movedTask) {
+      setActiveTaskId(null);
       return;
     }
 
@@ -589,6 +594,8 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
       position: movedTask.position,
       nextColumns,
     });
+
+    setActiveTaskId(null);
   };
 
   const handleDragCancel = () => {
@@ -681,7 +688,7 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
         ))}
       </div>
 
-      <DragOverlay>
+      <DragOverlay dropAnimation={DROP_ANIMATION}>
         {activeTask ? (
           <div className="w-[320px] cursor-grabbing">
             <KanbanCard
