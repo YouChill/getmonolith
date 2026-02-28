@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Check, GripVertical, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { KanbanCard } from "@/components/board/KanbanCard";
+import { KanbanCard } from "@/components/board/kanban-card";
 import type { TaskStatus } from "@/lib/db/types";
 import type { WorkspaceMemberOption } from "@/lib/hooks/use-workspace";
 

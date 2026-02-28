@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
-import { type SidebarPageItem, PageTreeItem } from "@/components/notes/PageTreeItem";
+import { type SidebarPageItem, PageTreeItem } from "@/components/notes/page-tree-item";
 import { Button } from "@/components/ui/button";
 import { notesTreeQueryKey } from "@/lib/react-query/query-keys";
 import { safeJson } from "@/lib/utils";

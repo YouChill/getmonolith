@@ -14,8 +14,8 @@ import {
 import { arrayMove } from "@dnd-kit/sortable";
 import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { KanbanCard } from "@/components/board/KanbanCard";
-import { KanbanColumn, type KanbanTaskCard } from "@/components/board/KanbanColumn";
+import { KanbanCard } from "@/components/board/kanban-card";
+import { KanbanColumn, type KanbanTaskCard } from "@/components/board/kanban-column";
 import { TASK_STATUSES, type TaskStatus } from "@/lib/db/types";
 import { useBoardFiltersStore, type BoardSortOption } from "@/lib/stores/board-filters-store";
 import { Input } from "@/components/ui/input";

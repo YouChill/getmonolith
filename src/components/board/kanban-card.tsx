@@ -5,7 +5,7 @@ import { CalendarDays, Flag, Pencil, Trash2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
-import type { KanbanTaskCard } from "@/components/board/KanbanColumn";
+import type { KanbanTaskCard } from "@/components/board/kanban-column";
 import type { TaskStatus } from "@/lib/db/types";
 import type { WorkspaceMemberOption } from "@/lib/hooks/use-workspace";
 import { blockQueryKey } from "@/lib/react-query/query-keys";

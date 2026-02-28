@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import type { BlockNoteContent } from "@/lib/types/blocknote";
 
 const BlockNoteEditor = dynamic(
-  () => import("@/components/editor/BlockNoteEditor").then((mod) => mod.BlockNoteEditor),
+  () => import("@/components/editor/block-note-editor").then((mod) => mod.BlockNoteEditor),
   { ssr: false },
 );
 

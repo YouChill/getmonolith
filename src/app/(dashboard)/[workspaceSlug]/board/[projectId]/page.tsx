@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
-import { KanbanBoard } from "@/components/board/KanbanBoard";
-import type { KanbanTaskCard } from "@/components/board/KanbanColumn";
+import { KanbanBoard } from "@/components/board/kanban-board";
+import type { KanbanTaskCard } from "@/components/board/kanban-column";
 import type { TaskStatus } from "@/lib/db/types";
 import { createServerClient } from "@/lib/supabase/server";
 

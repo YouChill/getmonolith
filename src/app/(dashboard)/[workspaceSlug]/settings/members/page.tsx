@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createServerClient } from "@/lib/supabase/server";
-import { InviteMemberForm } from "./InviteMemberForm";
-import { MemberActions } from "./MemberActions";
+import { InviteMemberForm } from "./invite-member-form";
+import { MemberActions } from "./member-actions";
 
 interface MembersPageProps {
   params: Promise<{ workspaceSlug: string }>;

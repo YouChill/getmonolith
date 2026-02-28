@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { BlockPage } from "@/components/block/BlockPage";
+import { BlockPage } from "@/components/block/block-page";
 import { createServerClient } from "@/lib/supabase/server";
 import type { BlockNoteContent } from "@/lib/types/blocknote";
 import type { TaskStatus } from "@/lib/db/types";

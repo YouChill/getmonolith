@@ -19,8 +19,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSidebarStore } from "@/lib/stores/sidebar-store";
-import { WorkspaceSwitcher } from "@/components/layout/WorkspaceSwitcher";
-import { NotesTreeSidebar } from "@/components/notes/NotesTreeSidebar";
+import { WorkspaceSwitcher } from "@/components/layout/workspace-switcher";
+import { NotesTreeSidebar } from "@/components/notes/notes-tree-sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

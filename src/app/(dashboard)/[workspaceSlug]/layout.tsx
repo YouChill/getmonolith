@@ -1,9 +1,9 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createServerClient } from "@/lib/supabase/server";
-import { Sidebar, SidebarSkeleton } from "@/components/layout/Sidebar";
-import { Navbar } from "@/components/layout/Navbar";
-import { ReactQueryProvider } from "@/components/providers/ReactQueryProvider";
+import { Sidebar, SidebarSkeleton } from "@/components/layout/sidebar";
+import { Navbar } from "@/components/layout/navbar";
+import { ReactQueryProvider } from "@/components/providers/react-query-provider";
 
 interface WorkspaceLayoutProps {
   children: React.ReactNode;

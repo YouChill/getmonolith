@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { CalendarPageClient, type CalendarTaskEvent, type CalendarWorkspaceProject } from "@/components/calendar/CalendarPageClient";
+import { CalendarPageClient, type CalendarTaskEvent, type CalendarWorkspaceProject } from "@/components/calendar/calendar-page-client";
 import { createServerClient } from "@/lib/supabase/server";
 
 interface WorkspaceCalendarPageProps {
