@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { boardColumnsQueryKey } from "@/lib/react-query/query-keys";
 import { useWorkspace, type WorkspaceMemberOption } from "@/lib/hooks/use-workspace";
+import { safeJson } from "@/lib/utils";
 
 interface KanbanBoardProps {
   workspaceSlug: string;
@@ -228,7 +229,7 @@ function moveTask(
 
 async function apiRequest<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, options);
-  const result = (await response.json()) as ApiResponse<T>;
+  const result = await safeJson<ApiResponse<T>>(response);
 
   if (!response.ok || !result.data) {
     throw new Error(result.error ?? "Request failed");

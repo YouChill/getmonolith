@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { sidebarProjectsQueryKey } from "@/lib/react-query/query-keys";
+import { safeJson } from "@/lib/utils";
 
 interface WorkspaceItem {
   id: string;
@@ -233,7 +234,7 @@ export function Sidebar({ currentWorkspaceSlug, workspaceId, workspaces, project
         body: JSON.stringify({ workspaceId, ...values }),
       });
 
-      const payload = (await response.json()) as ProjectApiResponse;
+      const payload = await safeJson<ProjectApiResponse>(response);
 
       if (!response.ok || !payload.data) {
         throw new Error(payload.error ?? "Nie udało się utworzyć projektu.");
@@ -285,7 +286,7 @@ export function Sidebar({ currentWorkspaceSlug, workspaceId, workspaces, project
         body: JSON.stringify(vars.values),
       });
 
-      const payload = (await response.json()) as ProjectApiResponse;
+      const payload = await safeJson<ProjectApiResponse>(response);
 
       if (!response.ok || !payload.data) {
         throw new Error(payload.error ?? "Nie udało się zaktualizować projektu.");
@@ -324,7 +325,7 @@ export function Sidebar({ currentWorkspaceSlug, workspaceId, workspaces, project
         method: "DELETE",
       });
 
-      const payload = (await response.json()) as DeleteProjectApiResponse;
+      const payload = await safeJson<DeleteProjectApiResponse>(response);
 
       if (!response.ok || !payload.data) {
         throw new Error(payload.error ?? "Nie udało się usunąć projektu.");

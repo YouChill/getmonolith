@@ -7,7 +7,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
+import { cn, safeJson } from "@/lib/utils";
 import { calendarEventsQueryKey } from "@/lib/react-query/query-keys";
 
 export interface CalendarTaskEvent {
@@ -313,7 +313,7 @@ export function CalendarPageClient({ workspaceSlug, workspaceId, workspaceName, 
         }),
       });
 
-      const result = (await response.json()) as ApiResponse<BlockApiData>;
+      const result = await safeJson<ApiResponse<BlockApiData>>(response);
 
       if (!response.ok || !result.data) {
         throw new Error(result.error ?? "Nie udało się utworzyć zadania.");

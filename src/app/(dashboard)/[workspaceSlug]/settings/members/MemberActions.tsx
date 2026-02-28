@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { workspaceMembersQueryKey } from "@/lib/react-query/query-keys";
+import { safeJson } from "@/lib/utils";
 
 interface MemberActionsProps {
   workspaceId: string;
@@ -54,7 +55,7 @@ export function MemberActions({
         body: JSON.stringify({ role: vars.role }),
       });
 
-      const payload = (await response.json()) as RoleChangeResponse;
+      const payload = await safeJson<RoleChangeResponse>(response);
 
       if (!response.ok || !payload.data) {
         throw new Error(payload.error ?? "Nie udało się zmienić roli.");
@@ -85,7 +86,7 @@ export function MemberActions({
         method: "DELETE",
       });
 
-      const payload = (await response.json()) as DeleteMemberResponse;
+      const payload = await safeJson<DeleteMemberResponse>(response);
 
       if (!response.ok || !payload.data) {
         throw new Error(payload.error ?? "Nie udało się usunąć członka.");

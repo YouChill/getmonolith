@@ -7,6 +7,7 @@ import { Plus } from "lucide-react";
 import { type SidebarPageItem, PageTreeItem } from "@/components/notes/PageTreeItem";
 import { Button } from "@/components/ui/button";
 import { notesTreeQueryKey } from "@/lib/react-query/query-keys";
+import { safeJson } from "@/lib/utils";
 
 interface NotesTreeSidebarProps {
   workspaceId: string;
@@ -120,7 +121,7 @@ export function NotesTreeSidebar({ workspaceId, workspaceSlug, isCollapsed, page
         body: JSON.stringify({ workspaceId, type: "page", title: "Nowa strona", parentBlockId: vars.parentBlockId }),
       });
 
-      const payload = (await response.json()) as CreatePageResponse;
+      const payload = await safeJson<CreatePageResponse>(response);
 
       if (!response.ok || !payload.data) {
         throw new Error(payload.error ?? "Nie udało się utworzyć strony.");
@@ -178,7 +179,7 @@ export function NotesTreeSidebar({ workspaceId, workspaceSlug, isCollapsed, page
         body: JSON.stringify({ parent_block_id: vars.parentBlockId, position: vars.position }),
       });
 
-      const payload = (await response.json()) as MovePageResponse;
+      const payload = await safeJson<MovePageResponse>(response);
 
       if (!response.ok || !payload.data) {
         throw new Error(payload.error ?? "Nie udało się przenieść strony.");
