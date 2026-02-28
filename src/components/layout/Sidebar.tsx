@@ -82,7 +82,7 @@ function SidebarLink({ href, label, icon: Icon, isActive, collapsed }: SidebarLi
       href={href}
       className={cn(
         "group flex h-9 items-center rounded-md border-l-2 border-transparent px-3 text-sm text-content-secondary transition-all duration-200 hover:bg-bg-elevated hover:pl-3.5 hover:text-content-primary",
-        isActive && "border-l-sky-500 bg-bg-elevated text-content-primary"
+        isActive && "border-l-ws-accent bg-bg-elevated text-content-primary"
       )}
       title={collapsed ? label : undefined}
     >
@@ -214,6 +214,9 @@ export function Sidebar({ currentWorkspaceSlug, workspaceId, workspaces, project
   const [projectItems, setProjectItems] = useState<ProjectItem[]>(projects);
   const [projectModalMode, setProjectModalMode] = useState<"create" | "edit" | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+
+  const currentWorkspace = workspaces.find((ws) => ws.slug === currentWorkspaceSlug);
+  const wsAccentValue = currentWorkspace?.type === "personal" ? "var(--color-workspace-personal)" : "var(--color-workspace-work)";
 
   const selectedProject = useMemo(
     () => projectItems.find((project) => project.id === selectedProjectId) ?? null,
@@ -387,6 +390,7 @@ export function Sidebar({ currentWorkspaceSlug, workspaceId, workspaces, project
         "flex h-screen shrink-0 flex-col border-r border-border-subtle bg-bg-subtle p-3 transition-all duration-200",
         isCollapsed ? "w-14" : "w-64"
       )}
+      style={{ "--ws-accent": wsAccentValue } as React.CSSProperties}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
@@ -476,7 +480,7 @@ export function Sidebar({ currentWorkspaceSlug, workspaceId, workspaces, project
                   href={projectHref}
                   className={cn(
                     "flex h-9 min-w-0 flex-1 items-center rounded-md border-l-2 border-transparent px-3 text-sm text-content-secondary transition-all duration-200 hover:bg-bg-elevated hover:text-content-primary",
-                    isActive && "border-l-sky-500 bg-bg-elevated text-content-primary"
+                    isActive && "border-l-ws-accent bg-bg-elevated text-content-primary"
                   )}
                   title={isCollapsed ? project.name : undefined}
                 >

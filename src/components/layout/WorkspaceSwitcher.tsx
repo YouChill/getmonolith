@@ -20,7 +20,7 @@ interface WorkspaceSwitcherProps {
 }
 
 function workspaceDotColor(type: WorkspaceItem["type"]) {
-  return type === "personal" ? "bg-violet-500" : "bg-sky-500";
+  return type === "personal" ? "bg-workspace-personal" : "bg-workspace-work";
 }
 
 export function WorkspaceSwitcher({

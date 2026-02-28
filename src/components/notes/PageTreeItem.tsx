@@ -70,7 +70,7 @@ export function PageTreeItem({
           href={`/${workspaceSlug}/block/${page.id}`}
           className={cn(
             "flex h-8 min-w-0 flex-1 items-center rounded-md border-l-2 border-transparent px-2 text-sm text-content-secondary transition hover:bg-bg-elevated hover:text-content-primary",
-            isActive && "border-l-sky-500 bg-bg-elevated text-content-primary"
+            isActive && "border-l-ws-accent bg-bg-elevated text-content-primary"
           )}
           style={!isCollapsed ? { marginLeft: `${depth * 12}px` } : undefined}
           title={page.title}

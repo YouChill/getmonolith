@@ -258,7 +258,7 @@ export function NotesTreeSidebar({ workspaceId, workspaceSlug, isCollapsed, page
     return (
       <>
         <div
-          className="h-1 rounded bg-transparent transition hover:bg-sky-500/20"
+          className="h-1 rounded bg-transparent transition hover:bg-ws-accent/20"
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => {
             event.preventDefault();
@@ -288,7 +288,7 @@ export function NotesTreeSidebar({ workspaceId, workspaceSlug, isCollapsed, page
               {!isCollapsed && children.length > 0 && isExpanded && <div>{renderPageTree(page.id, depth + 1)}</div>}
 
               <div
-                className="h-1 rounded bg-transparent transition hover:bg-sky-500/20"
+                className="h-1 rounded bg-transparent transition hover:bg-ws-accent/20"
                 onDragOver={(event) => event.preventDefault()}
                 onDrop={(event) => {
                   event.preventDefault();

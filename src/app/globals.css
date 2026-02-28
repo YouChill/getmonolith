@@ -77,6 +77,13 @@
   --color-priority-urgent-bg: #4c0519;
   --color-priority-urgent-text: #fb7185;
 
+  /* Workspace tokens (DESIGN.md) */
+  --color-workspace-personal: #7c3aed;
+  --color-workspace-work: #0ea5e9;
+
+  /* Dynamic workspace accent — set via inline style on sidebar */
+  --color-ws-accent: var(--ws-accent, #0ea5e9);
+
   /* System tokens */
   --color-success: #22c55e;
 }
