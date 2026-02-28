@@ -58,6 +58,27 @@
   --color-content-primary: #fafafa;
   --color-content-secondary: #a1a1aa;
   --color-content-muted: #71717a;
+
+  /* Status badge tokens (DESIGN.md) */
+  --color-status-todo-bg: #27272a;
+  --color-status-todo-text: #a1a1aa;
+  --color-status-in-progress-bg: #172554;
+  --color-status-in-progress-text: #60a5fa;
+  --color-status-done-bg: #052e16;
+  --color-status-done-text: #4ade80;
+
+  /* Priority badge tokens (DESIGN.md) */
+  --color-priority-low-bg: #18181b;
+  --color-priority-low-text: #a1a1aa;
+  --color-priority-medium-bg: #422006;
+  --color-priority-medium-text: #fbbf24;
+  --color-priority-high-bg: #450a0a;
+  --color-priority-high-text: #f87171;
+  --color-priority-urgent-bg: #4c0519;
+  --color-priority-urgent-text: #fb7185;
+
+  /* System tokens */
+  --color-success: #22c55e;
 }
 
 :root {

@@ -92,9 +92,9 @@ export function InviteMemberForm({ workspaceId }: InviteMemberFormProps) {
       </div>
 
       {inviteMutation.isError && (
-        <p className="mt-3 text-sm text-red-400">{inviteMutation.error.message}</p>
+        <p className="mt-3 text-sm text-destructive">{inviteMutation.error.message}</p>
       )}
-      {success && <p className="mt-3 text-sm text-emerald-400">{success}</p>}
+      {success && <p className="mt-3 text-sm text-success">{success}</p>}
 
       <div className="mt-4">
         <Button type="submit" disabled={inviteMutation.isPending}>

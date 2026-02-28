@@ -321,7 +321,7 @@ export function BlockPage({
           <span className="text-sm text-content-muted">{saveState === "saving" ? "Saving..." : "Saved"}</span>
         </div>
 
-        {saveError ? <p className="mb-3 text-sm text-red-400">{saveError}</p> : null}
+        {saveError ? <p className="mb-3 text-sm text-destructive">{saveError}</p> : null}
 
         <BlockNoteEditor initialContent={initialContent} onChange={setContent} />
       </section>

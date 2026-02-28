@@ -165,7 +165,7 @@ export default function RegisterPage() {
             />
           </div>
           {error && (
-            <p className="text-sm text-[#ef4444]">{error}</p>
+            <p className="text-sm text-destructive">{error}</p>
           )}
         </CardContent>
         <CardFooter className="flex flex-col space-y-3">

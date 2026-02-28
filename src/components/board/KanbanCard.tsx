@@ -124,7 +124,7 @@ export function KanbanCard({
 
         <div className="flex items-center gap-1.5">
           <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
-          <span className={cardIsOverdue ? "font-medium text-red-400" : undefined}>{formatDueDate(card.dueDate)}</span>
+          <span className={cardIsOverdue ? "font-medium text-destructive" : undefined}>{formatDueDate(card.dueDate)}</span>
         </div>
 
         <div className="flex items-center gap-1.5">
