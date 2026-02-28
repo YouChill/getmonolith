@@ -62,7 +62,9 @@
 - **Tailwind v4:** Brak `tailwind.config.ts` — tokeny przez `--color-*` CSS properties w `@theme inline {}` w `src/app/globals.css`
 - **Mutacje:** Zawsze `useMutation` z `@tanstack/react-query` z pełnym wzorcem `onMutate`/`onError`/`onSettled`
 - **Parsowanie JSON:** W klientach używaj `safeJson<T>(response)` z `@/lib/utils` zamiast `response.json()`
+- **Route Handlers:** Zawsze opakowuj `request.json()` w try-catch → `{ data: null, error: "Invalid JSON body" }` (400)
 - **Query keys:** Centralizowane w `src/lib/react-query/query-keys.ts`
+- **Workspace colors:** Tokeny `workspace-personal` (#7c3aed) i `workspace-work` (#0ea5e9), dynamiczny `ws-accent` przez inline style
 
 ## Workflow
 

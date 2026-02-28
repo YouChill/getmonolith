@@ -254,108 +254,95 @@ rounded-full         — avatary, badge'y
 
 ---
 
-## Tailwind config
+## Tailwind v4 — tokeny w `@theme inline {}`
 
-```typescript
-// tailwind.config.ts
-import type { Config } from 'tailwindcss';
+Brak `tailwind.config.ts` — wszystkie tokeny definiowane jako CSS custom properties w `@theme inline {}` w `src/app/globals.css`.
 
-const config: Config = {
-  darkMode: ['class'],
-  content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}'],
-  theme: {
-    extend: {
-      colors: {
-        bg: {
-          base:     '#0a0a0b',
-          subtle:   '#111113',
-          surface:  '#18181b',
-          elevated: '#1f1f23',
-          overlay:  '#27272a',
-        },
-        border: {
-          subtle:  '#27272a',
-          default: '#3f3f46',
-          strong:  '#52525b',
-        },
-        content: {
-          primary:   '#fafafa',
-          secondary: '#a1a1aa',
-          muted:     '#71717a',
-        },
-        accent: {
-          DEFAULT: '#e2e8f0',
-          hover:   '#f8fafc',
-          muted:   'rgb(226 232 240 / 0.08)',
-        },
-        status: {
-          todo:        '#3f3f46',
-          'in-progress': '#1d4ed8',
-          done:        '#15803d',
-        },
-      },
-      fontFamily: {
-        sans: ['var(--font-geist)', 'ui-sans-serif', 'system-ui'],
-        mono: ['var(--font-geist-mono)', 'ui-monospace'],
-      },
-      fontSize: {
-        xs:   ['11px', { lineHeight: '1.5' }],
-        sm:   ['13px', { lineHeight: '1.5' }],
-        base: ['15px', { lineHeight: '1.6' }],
-        lg:   ['17px', { lineHeight: '1.5' }],
-        xl:   ['20px', { lineHeight: '1.4' }],
-        '2xl': ['24px', { lineHeight: '1.3' }],
-        '3xl': ['30px', { lineHeight: '1.2' }],
-      },
-      spacing: {
-        sidebar: '240px',
-        'sidebar-collapsed': '56px',
-        'panel': '280px',
-      },
-    },
-  },
-};
+```css
+/* src/app/globals.css — fragment @theme inline {} */
+@theme inline {
+  /* Monolith design tokens */
+  --color-bg-base: #0a0a0b;
+  --color-bg-subtle: #111113;
+  --color-bg-surface: #18181b;
+  --color-bg-elevated: #1f1f23;
+  --color-bg-overlay: #27272a;
+  --color-border-subtle: #27272a;
+  --color-border-default: #3f3f46;
+  --color-border-strong: #52525b;
+  --color-content-primary: #fafafa;
+  --color-content-secondary: #a1a1aa;
+  --color-content-muted: #71717a;
 
-export default config;
+  /* Status badge tokens */
+  --color-status-todo-bg: #27272a;
+  --color-status-todo-text: #a1a1aa;
+  --color-status-in-progress-bg: #172554;
+  --color-status-in-progress-text: #60a5fa;
+  --color-status-done-bg: #052e16;
+  --color-status-done-text: #4ade80;
+
+  /* Priority badge tokens */
+  --color-priority-low-bg: #18181b;
+  --color-priority-low-text: #a1a1aa;
+  --color-priority-medium-bg: #422006;
+  --color-priority-medium-text: #fbbf24;
+  --color-priority-high-bg: #450a0a;
+  --color-priority-high-text: #f87171;
+  --color-priority-urgent-bg: #4c0519;
+  --color-priority-urgent-text: #fb7185;
+
+  /* Workspace tokens */
+  --color-workspace-personal: #7c3aed;
+  --color-workspace-work: #0ea5e9;
+  --color-ws-accent: var(--ws-accent, #0ea5e9);
+
+  /* System tokens */
+  --color-success: #22c55e;
+}
 ```
+
+Użycie w Tailwind: `bg-bg-surface`, `text-content-muted`, `bg-status-done-bg`, `text-workspace-personal`, `border-ws-accent`.
 
 ---
 
 ## globals.css — shadcn/ui override
 
 ```css
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Tailwind v4 imports */
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-@layer base {
-  :root {
-    --background:    10 10 11;
-    --foreground:    250 250 250;
-    --card:          24 24 27;
-    --card-foreground: 250 250 250;
-    --popover:       39 39 42;
-    --popover-foreground: 250 250 250;
-    --primary:       226 232 240;
-    --primary-foreground: 9 9 11;
-    --secondary:     39 39 42;
-    --secondary-foreground: 161 161 170;
-    --muted:         24 24 27;
-    --muted-foreground: 113 113 122;
-    --accent:        31 31 35;
-    --accent-foreground: 250 250 250;
-    --destructive:   239 68 68;
-    --destructive-foreground: 250 250 250;
-    --border:        63 63 70;
-    --input:         24 24 27;
-    --ring:          82 82 91;
-    --radius:        0.375rem;
-  }
+@custom-variant dark (&:is(.dark *));
+
+/* shadcn/ui CSS variables — dark-only */
+:root {
+  --radius: 0.625rem;
+  --background: #0a0a0b;
+  --foreground: #fafafa;
+  --card: #18181b;
+  --card-foreground: #fafafa;
+  --popover: #27272a;
+  --popover-foreground: #fafafa;
+  --primary: #e2e8f0;
+  --primary-foreground: #09090b;
+  --secondary: #27272a;
+  --secondary-foreground: #a1a1aa;
+  --muted: #18181b;
+  --muted-foreground: #71717a;
+  --accent: #1f1f23;
+  --accent-foreground: #fafafa;
+  --destructive: #ef4444;
+  --destructive-foreground: #fafafa;
+  --border: #3f3f46;
+  --input: #18181b;
+  --ring: #52525b;
 }
 
 @layer base {
   * {
-    @apply border-border;
+    @apply border-border outline-ring/50;
   }
   body {
     @apply bg-bg-base text-content-primary font-sans antialiased;
