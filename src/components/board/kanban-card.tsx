@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
