@@ -2,7 +2,6 @@
 
 import {
   closestCorners,
-  defaultDropAnimationSideEffects,
   DndContext,
   DragOverlay,
   MouseSensor,
@@ -11,7 +10,6 @@ import {
   useSensors,
   type DragEndEvent,
   type DragStartEvent,
-  type DropAnimation,
 } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
 import { useCallback, useMemo, useState } from "react";
@@ -91,12 +89,6 @@ const PRIORITY_ORDER: Record<NonNullable<KanbanTaskCard["priority"]>, number> = 
   high: 3,
   medium: 2,
   low: 1,
-};
-
-const DROP_ANIMATION: DropAnimation = {
-  sideEffects: defaultDropAnimationSideEffects({
-    styles: { active: { opacity: "0.4" } },
-  }),
 };
 
 function isTaskStatus(value: string): value is TaskStatus {
@@ -688,7 +680,7 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
         ))}
       </div>
 
-      <DragOverlay dropAnimation={DROP_ANIMATION}>
+      <DragOverlay dropAnimation={null}>
         {activeTask ? (
           <div className="w-[320px] cursor-grabbing">
             <KanbanCard
