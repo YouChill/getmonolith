@@ -68,16 +68,16 @@ interface CreateCalendarTaskVars {
 const WEEKDAY_LABELS = ["Pon", "Wt", "Śr", "Czw", "Pt", "Sob", "Ndz"];
 
 const PRIORITY_BADGES: Record<NonNullable<CalendarTaskEvent["priority"]>, string> = {
-  low: "bg-emerald-500/20 text-emerald-300",
-  medium: "bg-sky-500/20 text-sky-300",
-  high: "bg-amber-500/20 text-amber-300",
-  urgent: "bg-rose-500/20 text-rose-300",
+  low: "bg-priority-low-bg text-priority-low-text",
+  medium: "bg-priority-medium-bg text-priority-medium-text",
+  high: "bg-priority-high-bg text-priority-high-text",
+  urgent: "bg-priority-urgent-bg text-priority-urgent-text",
 };
 
 const STATUS_BADGES: Record<NonNullable<CalendarTaskEvent["status"]>, string> = {
-  todo: "bg-slate-500/20 text-slate-300",
-  in_progress: "bg-indigo-500/20 text-indigo-300",
-  done: "bg-emerald-500/20 text-emerald-300",
+  todo: "bg-status-todo-bg text-status-todo-text",
+  in_progress: "bg-status-in-progress-bg text-status-in-progress-text",
+  done: "bg-status-done-bg text-status-done-text",
 };
 
 function parseMonthKey(monthKey: string): Date {
@@ -256,7 +256,7 @@ function CreateTaskModal({
             </div>
           </div>
 
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>

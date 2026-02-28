@@ -136,7 +136,7 @@ export function MemberActions({
           variant="ghost"
           onClick={() => deleteMemberMutation.mutate()}
           disabled={isPending || (isSelf && currentUserRole === "owner")}
-          className="text-red-400 hover:text-red-300"
+          className="text-destructive hover:text-destructive/80"
         >
           {deleteMemberMutation.isPending ? "Usuwanie..." : "Usuń"}
         </Button>
@@ -147,10 +147,10 @@ export function MemberActions({
       )}
 
       {changeRoleMutation.isError && (
-        <p className="text-xs text-red-400">{changeRoleMutation.error.message}</p>
+        <p className="text-xs text-destructive">{changeRoleMutation.error.message}</p>
       )}
       {deleteMemberMutation.isError && (
-        <p className="text-xs text-red-400">{deleteMemberMutation.error.message}</p>
+        <p className="text-xs text-destructive">{deleteMemberMutation.error.message}</p>
       )}
     </div>
   );

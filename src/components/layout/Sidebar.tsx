@@ -172,7 +172,7 @@ function ProjectModal({
             />
           </div>
 
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose} disabled={pending}>
@@ -504,7 +504,7 @@ export function Sidebar({ currentWorkspaceSlug, workspaceId, workspaces, project
                     </button>
                     <button
                       type="button"
-                      className="rounded-md p-1 text-content-muted hover:bg-bg-elevated hover:text-red-400"
+                      className="rounded-md p-1 text-content-muted hover:bg-bg-elevated hover:text-destructive"
                       aria-label={`Usuń projekt ${project.name}`}
                       onClick={() => handleDeleteProject(project)}
                     >
