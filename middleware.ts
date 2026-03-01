@@ -19,7 +19,7 @@ import type { NextRequest } from 'next/server';
  */
 
 const protectedSegments = ['/board', '/calendar', '/notes', '/block', '/settings'];
-const authPaths = ['/login', '/register'];
+const authPaths = ['/login', '/register', '/forgot-password'];
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
