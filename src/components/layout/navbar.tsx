@@ -1,7 +1,17 @@
 "use client";
 
-import { useMemo } from "react";
-import { usePathname } from "next/navigation";
+import { useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { LogOut } from "lucide-react";
+import { createBrowserClient } from "@/lib/supabase/client";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface NavbarProps {
   workspaceName: string;
@@ -16,6 +26,8 @@ function toCrumb(segment: string) {
 
 export function Navbar({ workspaceName, userEmail }: NavbarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const breadcrumbs = useMemo(() => {
     const segments = pathname.split("/").filter(Boolean);
@@ -29,6 +41,14 @@ export function Navbar({ workspaceName, userEmail }: NavbarProps) {
   }, [pathname, workspaceName]);
 
   const avatarFallback = (userEmail[0] ?? "U").toUpperCase();
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    const supabase = createBrowserClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  }
 
   return (
     <header className="flex h-12 items-center justify-between border-b border-border-subtle bg-bg-base px-4">
@@ -45,9 +65,31 @@ export function Navbar({ workspaceName, userEmail }: NavbarProps) {
         ))}
       </nav>
 
-      <div className="flex h-8 w-8 items-center justify-center rounded-full border border-border-default bg-bg-surface text-sm font-medium text-content-primary">
-        {avatarFallback}
-      </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-border-default bg-bg-surface text-sm font-medium text-content-primary transition-colors duration-150 hover:bg-bg-elevated hover:border-border-strong focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border-strong"
+          >
+            {avatarFallback}
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56 border-border-subtle bg-bg-surface">
+          <DropdownMenuLabel className="font-normal">
+            <p className="text-sm font-medium text-content-primary">Konto</p>
+            <p className="text-xs text-content-muted truncate">{userEmail}</p>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator className="bg-border-subtle" />
+          <DropdownMenuItem
+            onClick={handleLogout}
+            disabled={loggingOut}
+            className="text-content-secondary focus:bg-bg-elevated focus:text-content-primary cursor-pointer"
+          >
+            <LogOut className="h-4 w-4" />
+            {loggingOut ? "Wylogowywanie..." : "Wyloguj sie"}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </header>
   );
 }
