@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
   FolderKanban,
+  LogOut,
   NotebookPen,
   Pencil,
   Plus,
@@ -26,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { sidebarProjectsQueryKey } from "@/lib/react-query/query-keys";
 import { safeJson } from "@/lib/utils";
+import { createBrowserClient } from "@/lib/supabase/client";
 
 interface WorkspaceItem {
   id: string;
@@ -384,6 +386,16 @@ export function Sidebar({ currentWorkspaceSlug, workspaceId, workspaces, project
 
   const isPending = createProjectMutation.isPending || updateProjectMutation.isPending || deleteProjectMutation.isPending;
 
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    const supabase = createBrowserClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  }
+
   return (
     <aside
       className={cn(
@@ -558,6 +570,26 @@ export function Sidebar({ currentWorkspaceSlug, workspaceId, workspaces, project
           Trwa synchronizacja zmian...
         </div>
       )}
+
+      <div className="mt-2 border-t border-border-subtle pt-2">
+        <button
+          type="button"
+          onClick={handleLogout}
+          disabled={loggingOut}
+          className={cn(
+            "flex h-9 w-full items-center rounded-md px-3 text-sm text-content-secondary transition-colors duration-150 hover:bg-bg-elevated hover:text-content-primary disabled:opacity-50",
+            isCollapsed && "justify-center px-0"
+          )}
+          title={isCollapsed ? "Wyloguj sie" : undefined}
+        >
+          <LogOut className="h-4 w-4 shrink-0" />
+          {!isCollapsed && (
+            <span className="ml-2 truncate">
+              {loggingOut ? "Wylogowywanie..." : "Wyloguj sie"}
+            </span>
+          )}
+        </button>
+      </div>
     </aside>
   );
 }
