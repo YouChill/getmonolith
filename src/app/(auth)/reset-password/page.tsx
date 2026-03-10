@@ -35,8 +35,8 @@ export default function ResetPasswordPage() {
     });
 
     // User might already have a session from the callback redirect
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
         setSessionReady(true);
       }
     });

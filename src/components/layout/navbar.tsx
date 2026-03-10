@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useMemo } from "react";
+import { usePathname } from "next/navigation";
 import { LogOut } from "lucide-react";
-import { createBrowserClient } from "@/lib/supabase/client";
+import { useLogout } from "@/lib/hooks/use-logout";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,8 +26,7 @@ function toCrumb(segment: string) {
 
 export function Navbar({ workspaceName, userEmail }: NavbarProps) {
   const pathname = usePathname();
-  const router = useRouter();
-  const [loggingOut, setLoggingOut] = useState(false);
+  const { logout, loggingOut } = useLogout();
 
   const breadcrumbs = useMemo(() => {
     const segments = pathname.split("/").filter(Boolean);
@@ -41,14 +40,6 @@ export function Navbar({ workspaceName, userEmail }: NavbarProps) {
   }, [pathname, workspaceName]);
 
   const avatarFallback = (userEmail[0] ?? "U").toUpperCase();
-
-  async function handleLogout() {
-    setLoggingOut(true);
-    const supabase = createBrowserClient();
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
-  }
 
   return (
     <header className="flex h-12 items-center justify-between border-b border-border-subtle bg-bg-base px-4">
@@ -81,7 +72,7 @@ export function Navbar({ workspaceName, userEmail }: NavbarProps) {
           </DropdownMenuLabel>
           <DropdownMenuSeparator className="bg-border-subtle" />
           <DropdownMenuItem
-            onClick={handleLogout}
+            onClick={logout}
             disabled={loggingOut}
             className="text-content-secondary focus:bg-bg-elevated focus:text-content-primary cursor-pointer"
           >

@@ -27,7 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { sidebarProjectsQueryKey } from "@/lib/react-query/query-keys";
 import { safeJson } from "@/lib/utils";
-import { createBrowserClient } from "@/lib/supabase/client";
+import { useLogout } from "@/lib/hooks/use-logout";
 
 interface WorkspaceItem {
   id: string;
@@ -386,15 +386,7 @@ export function Sidebar({ currentWorkspaceSlug, workspaceId, workspaces, project
 
   const isPending = createProjectMutation.isPending || updateProjectMutation.isPending || deleteProjectMutation.isPending;
 
-  const [loggingOut, setLoggingOut] = useState(false);
-
-  async function handleLogout() {
-    setLoggingOut(true);
-    const supabase = createBrowserClient();
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
-  }
+  const { logout, loggingOut } = useLogout();
 
   return (
     <aside
@@ -574,7 +566,7 @@ export function Sidebar({ currentWorkspaceSlug, workspaceId, workspaces, project
       <div className="mt-2 border-t border-border-subtle pt-2">
         <button
           type="button"
-          onClick={handleLogout}
+          onClick={logout}
           disabled={loggingOut}
           className={cn(
             "flex h-9 w-full items-center rounded-md px-3 text-sm text-content-secondary transition-colors duration-150 hover:bg-bg-elevated hover:text-content-primary disabled:opacity-50",
