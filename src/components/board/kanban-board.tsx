@@ -14,6 +14,7 @@ import {
 import { arrayMove } from "@dnd-kit/sortable";
 import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { KanbanCard } from "@/components/board/kanban-card";
 import { KanbanColumn, type KanbanTaskCard } from "@/components/board/kanban-column";
 import { TASK_STATUSES, type TaskStatus } from "@/lib/db/types";
@@ -264,6 +265,7 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
   );
 
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [isDoneOpen, setIsDoneOpen] = useState(false);
   const [creatingByStatus, setCreatingByStatus] = useState<Record<TaskStatus, boolean>>({
     todo: false,
     in_progress: false,
@@ -602,7 +604,7 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      <div className="mb-4 grid grid-cols-1 gap-3 rounded-xl border border-border-subtle bg-bg-base p-3 md:grid-cols-2 xl:grid-cols-5">
+      <div className="mb-4 flex flex-col gap-3 rounded-xl border border-border-subtle bg-bg-base p-3 sm:grid sm:grid-cols-2 xl:grid-cols-5">
         <Input
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
@@ -662,22 +664,60 @@ export function KanbanBoard({ workspaceSlug, workspaceId, projectId, columns }: 
         <p className="mb-4 text-xs text-content-muted">Przeciąganie kart działa tylko przy sortowaniu "Po pozycji".</p>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {TASK_STATUSES.map((status) => (
-          <KanbanColumn
-            key={status}
-            title={COLUMN_TITLES[status]}
-            status={status}
-            workspaceSlug={workspaceSlug}
-            cards={visibleColumns[status]}
-            isCreating={creatingByStatus[status]}
-            disableDrag={!isPositionSort}
-            onCreateTask={handleCreateTask}
-            onUpdateTask={handleUpdateTask}
-            onDeleteTask={handleDeleteTask}
-            assigneeOptions={assigneeOptions}
-          />
-        ))}
+      <div className="-mx-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0 sm:overflow-x-visible">
+        <div className="flex min-w-0 gap-4 sm:grid sm:grid-cols-2">
+          {(["todo", "in_progress"] as const).map((status) => (
+            <div key={status} className="w-72 flex-shrink-0 sm:w-auto">
+              <KanbanColumn
+                title={COLUMN_TITLES[status]}
+                status={status}
+                workspaceSlug={workspaceSlug}
+                cards={visibleColumns[status]}
+                isCreating={creatingByStatus[status]}
+                disableDrag={!isPositionSort}
+                onCreateTask={handleCreateTask}
+                onUpdateTask={handleUpdateTask}
+                onDeleteTask={handleDeleteTask}
+                assigneeOptions={assigneeOptions}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <button
+          type="button"
+          onClick={() => setIsDoneOpen((prev) => !prev)}
+          className="flex w-full items-center gap-2 rounded-lg border border-border-subtle bg-bg-base px-4 py-3 text-sm font-medium text-content-secondary transition-colors hover:bg-bg-elevated"
+        >
+          {isDoneOpen ? (
+            <ChevronDown className="h-4 w-4 text-content-muted" aria-hidden="true" />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-content-muted" aria-hidden="true" />
+          )}
+          <span>Zamknięte</span>
+          <span className="ml-1 rounded-full bg-bg-elevated px-2 py-0.5 text-xs text-content-muted">{visibleColumns.done.length}</span>
+        </button>
+
+        {isDoneOpen ? (
+          <div className="-mx-4 mt-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0 sm:overflow-x-visible">
+            <div className="w-72 sm:w-full">
+              <KanbanColumn
+                title={COLUMN_TITLES.done}
+                status="done"
+                workspaceSlug={workspaceSlug}
+                cards={visibleColumns.done}
+                isCreating={creatingByStatus.done}
+                disableDrag={!isPositionSort}
+                onCreateTask={handleCreateTask}
+                onUpdateTask={handleUpdateTask}
+                onDeleteTask={handleDeleteTask}
+                assigneeOptions={assigneeOptions}
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <DragOverlay dropAnimation={null}>

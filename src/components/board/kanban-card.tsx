@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, Flag, Pencil, Trash2, User } from "lucide-react";
+import { ArrowRight, CalendarDays, Flag, Pencil, Trash2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,16 @@ const PRIORITY_LABELS: Record<NonNullable<KanbanTaskCard["priority"]>, string> =
   medium: "Medium",
   high: "High",
   urgent: "Urgent",
+};
+
+const NEXT_STATUS: Partial<Record<TaskStatus, TaskStatus>> = {
+  todo: "in_progress",
+  in_progress: "done",
+};
+
+const NEXT_STATUS_LABEL: Partial<Record<TaskStatus, string>> = {
+  todo: "Rozpocznij",
+  in_progress: "Zakończ",
 };
 
 function formatDueDate(dueDate?: string): string {
@@ -171,15 +181,32 @@ export function KanbanCard({
               </div>
             </div>
           ) : (
-            <div className="mt-2 flex justify-end gap-1">
-              <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => setIsEditing(true)}>
-                <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                <span className="sr-only">Edit task</span>
-              </Button>
-              <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={handleDelete} disabled={isSubmitting}>
-                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                <span className="sr-only">Delete task</span>
-              </Button>
+            <div className="mt-2 flex items-center justify-between gap-1">
+              {NEXT_STATUS[card.status] ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 gap-1 px-2 text-xs text-content-muted hover:text-content-primary"
+                  onClick={() => onUpdateTask(card.id, { status: NEXT_STATUS[card.status] })}
+                  disabled={isSubmitting}
+                >
+                  <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                  {NEXT_STATUS_LABEL[card.status]}
+                </Button>
+              ) : (
+                <span />
+              )}
+              <div className="flex gap-1">
+                <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => setIsEditing(true)}>
+                  <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span className="sr-only">Edit task</span>
+                </Button>
+                <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={handleDelete} disabled={isSubmitting}>
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span className="sr-only">Delete task</span>
+                </Button>
+              </div>
             </div>
           )}
         </>
